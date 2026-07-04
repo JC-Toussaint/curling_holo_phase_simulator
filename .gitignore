@@ -9,6 +9,7 @@ pathIntegral
 install_manifest.txt
 
 # examples
+*.png
 /examples/**/*.png
 /examples/**/*.msh
 /examples/**/*.out

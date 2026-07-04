@@ -164,7 +164,7 @@ if __name__ == "__main__":
 
     plt.xlabel(r'$y$ [nm]')
     plt.ylabel(r'$\Phi(y)$ [rad]')
-    plt.title(r'Profil de la phase cumulative $\Phi(y)$')
+    plt.title(r'Profil de la phase Holographique $\Phi(y)$')
     plt.grid(alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(SCRIPT_DIR, 'phase_profile_y.png'), dpi=150)
