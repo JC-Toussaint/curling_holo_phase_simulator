@@ -1,0 +1,79 @@
+\documentclass[11pt, a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{geometry}
+\geometry{hmargin=2.5cm, vmargin=2.5cm}
+
+\title{Formalisation Mathématique de la Simulation Holographique \\ Mode de Curling Magnétique}
+\author{Modélisation de la Phase Cumulative}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction et Paramètres}
+La simulation modélise la distribution d'aimantation dans un cylindre ferromagnétique de rayon $R$ et son impact sur la phase d'un faisceau d'électrons (Holographie Électronique). Le système dépend des constantes physiques suivantes : la constante d'échange $A$, la constante d'anisotropie effective $K_u$, et l'aimantation à saturation $M_s$. 
+
+Le paramètre d'anisotropie adimensionnel est défini par :
+\begin{equation}
+    \kappa = \frac{K_u R^2}{2A}
+\end{equation}
+
+Le domaine spatial est discrétisé radialement sur la variable adimensionnelle $\rho = r/R \in [\epsilon, 1]$, où $\epsilon = r_0/R$ introduit un rayon de cœur minimal $r_0$ pour éviter la singularité numérique à l'origine.
+
+\section{Équation d'Euler-Lagrange (Structure de l'Aimantation)}
+La configuration micromagnétique du mode de curling est décrite par l'angle d'aimantation $\omega(\rho)$. Cet angle est solution d'un problème aux limites (BVP) régi par l'équation différentielle du second ordre suivante :
+\begin{equation}
+    \omega''(\rho) = -\frac{\omega'(\rho)}{\rho} + \left( \frac{1}{2\rho^2} + \kappa \right) \sin\big(2\omega(\rho)\big)
+\end{equation}
+Soumise aux conditions aux limites (CL) :
+\begin{equation}
+    \omega(\epsilon) = 0 \quad \text{et} \quad \omega'(1) = 0
+\end{equation}
+Cette équation est résolue numériquement à l'aide de l'algorithme \texttt{solve\_bvp} qui génère une approximation continue sous forme de spline.
+
+\section{Projection Magnétique et Intégrale $I(y)$}
+Le faisceau d'électrons se propage le long de l'axe $z$. Pour chaque coordonnée d'impact transverse $y \in [-R, R]$, le déphasage dépend de la projection de l'aimantation intégrée le long de la ligne de visée $z$.
+
+La limite géométrique d'intégration le long du cylindre est donnée par :
+\begin{equation}
+    z_{\text{max}}(y) = \sqrt{R^2 - y^2}
+\end{equation}
+
+Pour un point $(y, z)$ donné, la position radiale locale est $r = \sqrt{y^2 + z^2}$, soit $\rho = \frac{\sqrt{y^2 + z^2}}{R}$. L'intégrale de projection $I(y)$ s'exprime alors par :
+\begin{equation}
+    I(y) = -\mu_0 M_s \int_{-z_{\text{max}}(y)}^{z_{\text{max}}(y)} \cos\big(\omega(\rho)\big) \, \mathrm{d}z
+\end{equation}
+
+Dans le code, l'évaluation de cette expression est vectorisée sur tout le profil transverse $y$ via l'opérateur \texttt{np.vectorize} couplé à une quadrature numérique (\texttt{scipy.integrate.quad}).
+
+\section{Calcul de la Phase Cumulative $\Phi(y)$}
+En holographie électronique, la phase $\Phi(y)$ est liée au flux magnétique transverse intercepté. Elle s'obtient par l'intégration cumulative du profil $I(y)$.
+
+L'intégration de proche en proche s'effectue par la méthode des trapèzes à partir de la borne inférieure $-R$ :
+\begin{equation}
+    F_{\text{from\_minus\_R}}(y) = \int_{-R}^{y} I(u) \, \mathrm{d}u
+\end{equation}
+
+Afin de respecter la condition physique à l'origine imposant une phase nulle au centre exact du cylindre ($\Phi(0) = 0$), la constante d'intégration est ajustée en soustrayant la valeur évaluée en $y=0$ :
+\begin{equation}
+    F(y) = F_{\text{from\_minus\_R}}(y) - F_{\text{from\_minus\_R}}(0) = \int_{0}^{y} I(u) \, \mathrm{d}u
+\end{equation}
+
+Enfin, en intégrant les constantes physiques fondamentales (la charge élémentaire $e$ et la constante de Planck réduite $\hbar$), la phase cumulative finale vaut :
+\begin{equation}
+    \Phi(y) = -\frac{e}{\hbar} F(y) = -\frac{e}{\hbar} \int_{0}^{y} I(u) \, \mathrm{d}u
+\end{equation}
+
+\section{Génération de la Carte de Phase 2D}
+L'image finale de la carte de phase présente une invariance stricte selon l'axe longitudinal $z$. L'image discrète à deux dimensions $M(j, i)$ de taille $N \times N$ est générée en dupliquant le profil unidimensionnel normalisé sur chaque ligne (opérateur \texttt{np.tile}) :
+\begin{equation}
+    M(j, i) = \text{round}\left( 65535 \times \frac{\Phi(y_i) - \Phi_{\text{min}}}{\Phi_{\text{max}} - \Phi_{\text{min}}} \right)
+\end{equation}
+pour $j, i \in \{1, \dots, N\}$, codée de manière stricte sous forme d'entiers non signés sur 16 bits (\texttt{uint16}).
+
+\end{document}

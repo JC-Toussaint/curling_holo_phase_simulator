@@ -1,0 +1,316 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[french]{babel}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{physics}
+\usepackage{geometry}
+
+\geometry{margin=2.5cm}
+
+\title{Énergie d'échange et anisotropie dans un cylindre infini (mode de curling)}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Aimantation}
+
+On considère un cylindre ferromagnétique infini de rayon $R$.
+Les coordonnées cylindriques sont $(r,\varphi,z)$.
+
+L'aimantation réduite est supposée de la forme :
+
+\[
+\boxed{
+\mathbf m(r)
+=
+\sin\omega(r)\,\mathbf e_\varphi
++
+\cos\omega(r)\,\mathbf e_z
+}
+\]
+
+avec $\omega(r)$ l'angle par rapport à $Oz$.
+
+On a bien $|\mathbf m|=1$.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Gradient tensoriel}
+
+Le gradient tensoriel en coordonnées cylindriques est :
+
+\[
+\nabla\mathbf m
+=
+\frac{\partial\mathbf m}{\partial r}\otimes\mathbf e_r
++
+\frac1r\frac{\partial\mathbf m}{\partial\varphi}\otimes\mathbf e_\varphi
++
+\frac{\partial\mathbf m}{\partial z}\otimes\mathbf e_z.
+\]
+
+Les dérivées des vecteurs de base sont :
+
+\[
+\frac{\partial\mathbf e_r}{\partial\varphi}=\mathbf e_\varphi,\quad
+\frac{\partial\mathbf e_\varphi}{\partial\varphi}=-\mathbf e_r.
+\]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Dérivée radiale}
+
+\[
+\frac{\partial\mathbf m}{\partial r}
+=
+\omega'(r)\cos\omega\,\mathbf e_\varphi
+-
+\omega'(r)\sin\omega\,\mathbf e_z
+\]
+
+\[
+\left|\frac{\partial\mathbf m}{\partial r}\right|^2=(\omega')^2.
+\]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Dérivée azimutale}
+
+\[
+\frac{\partial\mathbf m}{\partial\varphi}
+=
+-\sin\omega\,\mathbf e_r
+\]
+
+\[
+\left|\frac1r\frac{\partial\mathbf m}{\partial\varphi}\right|^2
+=
+\frac{\sin^2\omega}{r^2}.
+\]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Gradient et norme}
+
+\[
+\boxed{
+\nabla\mathbf m:\nabla\mathbf m
+=
+(\omega')^2+\frac{\sin^2\omega}{r^2}
+}
+\]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Énergie d'échange}
+
+\[
+w_{\rm ex}
+=
+A\left[
+(\omega')^2+\frac{\sin^2\omega}{r^2}
+\right]
+\]
+
+\[
+\boxed{
+E_{\rm ex}
+=
+2\pi A
+\int_0^R
+\left[
+r(\omega')^2+\frac{\sin^2\omega}{r}
+\right]dr
+}
+\]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Ajout d'une anisotropie uniaxiale}
+
+On ajoute une anisotropie uniaxiale d'axe $Oz$ et de constante $K_u$.
+
+L'énergie volumique est :
+
+\[
+w_{\rm an}
+=
+K_u(1-m_z^2)
+\]
+
+or
+
+\[
+m_z=\cos\omega
+\]
+
+donc
+
+\[
+\boxed{
+w_{\rm an}=K_u\sin^2\omega
+}
+\]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Énergie d'anisotropie}
+
+\[
+\boxed{
+E_{\rm an}
+=
+2\pi K_u
+\int_0^R
+\sin^2\omega(r)\,r\,dr
+}
+\]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Énergie totale}
+
+La densité totale est :
+
+\[
+w=
+A\left[
+(\omega')^2+\frac{\sin^2\omega}{r^2}
+\right]
++
+K_u\sin^2\omega
+\]
+
+Donc :
+
+\[
+\boxed{
+E
+=
+2\pi
+\int_0^R
+\left[
+Ar(\omega')^2
++
+\left(\frac{A}{r}+K_u r\right)\sin^2\omega
+\right]dr
+}
+\]
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Équation d'Euler-Lagrange}
+
+Le lagrangien radial est :
+
+\[
+L=
+Ar(\omega')^2
++
+\left(\frac{A}{r}+K_u r\right)\sin^2\omega
+\]
+
+L'équation d'Euler-Lagrange donne :
+
+\[
+\frac{d}{dr}(2Ar\omega')
+-
+2\left(\frac{A}{r}+K_u r\right)\sin\omega\cos\omega=0
+\]
+
+soit :
+
+\[
+\boxed{
+\omega''
++\frac1r\omega'
+-
+\left(\frac1{r^2}+\frac{K_u}{A}\right)
+\sin\omega\cos\omega
+=0
+}
+\]
+
+En introduisant la variable adimensionnelle  $\rho = \frac{r}{R}$, l'équation différentielle devient:
+\[
+\omega_{\rho\rho}
++\frac{1}{\rho}\omega_\rho
+-\left(\frac{1}{2 \rho^2} + \kappa\right)\sin(2\omega)
+= 0
+\]
+
+avec \[
+\kappa = \frac{K_u R^2}{2A}
+\]
+
+Les conditions aux limites s'écrivent:
+\[
+\omega(\varepsilon)=0,
+\qquad
+\omega_\rho(1)=0.
+\]
+
+et en notant $\epsilon =  \frac{r_0}{R}$.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Remarques physiques}
+
+\begin{itemize}
+
+\item Le terme $\frac{1}{r^2}$ provient de la géométrie cylindrique (rotation de la base).
+
+\item Le terme $\frac{K_u}{A}$ joue le rôle d'une longueur d'échelle d'anisotropie.
+
+\item L'équation ci-dessus est celle utilisée pour l'étude du mode de curling et du champ de nucléation.
+
+\end{itemize}
+
+\section*{Justification du champ et de l'énergie démagnétisante}
+
+Le champ démagnétisant $\vec{H}_d$ est dicté par les équations de la magnétostatique. En l'absence de courants libres, il dérive d'un potentiel scalaire magnétique et sa divergence est directement reliée à la divergence de l'aimantation :
+\begin{equation}
+    \vec{\nabla} \cdot \vec{H}_d = -M_s\; \vec{\nabla} \cdot \vec{m} = \rho_m
+\end{equation}
+où $\rho_m$ représente la densité volumique de charges magnétiques. En coordonnées cylindriques, compte tenu des invariances de notre système par translation selon $Oz$ et par rotation autour de ce même axe, l'aimantation s'écrit $\vec{m} = m_\rho(\rho)\vec{e}_\rho + m_\phi(\rho)\vec{e}_\phi + m_z(\rho)\vec{e}_z$. Sa divergence se réduit alors strictement à sa contribution radiale :
+\begin{equation}
+    \vec{\nabla} \cdot \vec{m} = \frac{1}{\rho} \frac{\text{d}}{\text{d}\rho} \left(\rho \, m_\rho(\rho)\right) \implies \rho_m(\rho) = -M_s\frac{1}{\rho} \frac{\text{d}}{\text{d}\rho} \left(\rho \, m_\rho(\rho)\right)
+\end{equation}
+Par application du théorème de Gauss magnétique à un cylindre de rayon $\rho$ coaxial au système, le champ démagnétisant, purement radial par symétrie ($\vec{H}_d = H_d(\rho)\vec{e}_\rho$), est déterminé par la charge interne cumulée. Sachant qu'à l'axe ($\rho=0$) l'aimantation pointe selon $Oz$ (ce qui implique $m_\rho(0)=0$), l'intégration de la densité volumique donne de manière univoque :
+\begin{equation}
+    \vec{H}_d(\rho) = -M_s \; m_\rho(\rho)\vec{e}_\rho
+\end{equation}
+La densité locale d'énergie démagnétisante par unité de volume s'exprime par le produit scalaire standard :
+\begin{equation}
+    E_{\text{dém}} = -\frac{1}{2}\mu_0 \vec{H}_d \cdot \vec{m} = \frac{1}{2}\mu_0 M_s^2 \; m_\rho(\rho)^2
+\end{equation}
+
+\section*{Choix optimal pour réduire l'énergie}
+
+En exprimant les composantes de l'aimantation de norme constante $M_s$ en fonction de l'angle polaire $\omega$ (avec $Oz$) et de l'angle azimutal local $\phi$ (avec $\vec{e}_\rho$), la composante radiale devient $m_\rho = M_s \sin\omega \cos\phi$. L'énergie micromagnétique totale par unité de volume, incluant l'échange et l'anisotropie uniaxiale $K_u$, s'écrit donc :
+\begin{equation}
+    E = A \left[ \left(\frac{\text{d}\omega}{\text{d}\rho}\right)^2 + \sin^2\omega \left(\frac{\text{d}\phi}{\text{d}\rho}\right)^2 + \frac{\sin^2\omega}{\rho^2} \right] + K_u \sin^2\omega + \frac{1}{2}\mu_0 M_s^2 \sin^2\omega \cos^2\phi
+\end{equation}
+
+Une analyse de cette fonctionnelle d'énergie permet de dégager les propriétés suivantes pour l'état d'équilibre :
+\begin{itemize}
+    \item \textbf{Verrouillage de l'angle azimutal :} Le terme d'énergie démagnétisante est proportionnel à $\cos^2\phi$. Étant donné que le coefficient de l'énergie dipolaire est strictement positif ($\mu_0 M_s^2 > 0$), le système minimise rigoureusement son énergie globale en annulant ce terme. Cela impose la condition \textbf{$\phi = \pi/2$} en tout point du cylindre.
+    \item \textbf{Configuration en vortex pur (mode \textit{curling}) :} Physiquement, la condition $\phi = \pi/2$ signifie que la composante radiale de l'aimantation s'annule ($m_\rho = 0$). L'aimantation s'enroule de manière purement azimutale et axiale. D'après l'analyse magnétostatique préalable, ce choix annule simultanément le champ $\vec{H}_d$, les charges volumiques ($\rho_m = 0$) ainsi que les charges de surface en $\rho = R$ ($\sigma_m = \vec{m} \cdot \vec{e}_\rho = 0$). L'énergie démagnétisante est donc rigoureusement nulle à l'équilibre.
+    \item \textbf{Équation d'Euler-Lagrange réduite :} En substituant $\phi = \pi/2$ et $\frac{\text{d}\phi}{\text{d}\rho} = 0$, la compétition énergétique se résume à l'équilibre entre la raideur d'échange et l'anisotropie. L'équation d'Euler-Lagrange minimisant l'énergie par rapport à l'angle polaire $\omega(\rho)$ devient :
+    \begin{equation}
+        \frac{\text{d}^2\omega}{\text{d}\rho^2} + \frac{1}{\rho}\frac{\text{d}\omega}{\text{d}\rho} - \frac{\sin(2\omega)}{2\rho^2} - \frac{K_u}{2A}\sin(2\omega) = 0
+    \end{equation}
+\end{itemize}
+
+En introduisant la coordonnée radiale adimensionnelle $\tilde{\rho} = \rho/R$ et le paramètre d'anisotropie réduit $\kappa = \frac{K_u R^2}{2A}$, l'équation différentielle prend la forme finale implémentée dans le code de résolution numérique :
+\begin{equation}
+    \frac{\text{d}^2\omega}{\text{d}\tilde{\rho}^2} = -\frac{1}{\tilde{\rho}}\frac{\text{d}\omega}{\text{d}\tilde{\rho}} + \left(\frac{1}{2\tilde{\rho}^2} + \kappa\right)\sin(2\omega)
+\end{equation}
+Puisque l'anisotropie considérée est de type plan facile ($K_u < 0$), le paramètre $\kappa$ est négatif. Ce terme pousse l'aimantation à s'écarter de l'axe longitudinal pour s'allonger dans le plan ($\omega \to \pi/2$) à mesure que l'on s'éloigne du cœur du cylindre.
+
+\end{document}
