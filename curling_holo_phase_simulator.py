@@ -6,22 +6,9 @@ from PIL.PngImagePlugin import PngInfo  # <--- Ajout pour gérer les métadonné
 
 from scipy.constants import e, hbar, mu_0
 import os
+import argparse
 
-# =============================================================================
-# 1. PARAMÈTRES PHYSIQUES & CONFIGURATION
-# =============================================================================
-# Constantes du matériau (Unités SI)
-A  = 1.3e-11        # Constante d'échange (J/m)
-Ku = -1e4           # Constante d'anisotropie uniaxiale (J/m^3)
-Ms = 1.00531 / mu_0 # Aimantation (A/m)
-
-# Géométrie du cylindre
-R  = 100e-9       # Rayon extérieur du cylindre (m)
-r0 = R * 1e-6     # Rayon de cœur (singularité numérique évitée), très petit devant R
-
-# Paramètres adimensionnels et discrétisation pour solve_bvp
-kappa = (Ku * R**2) / (2 * A) # Parametre adimensionnel
-epsilon = r0 / R  # Limite inférieure du domaine adimensionnel
+# Discrétisation pour solve_bvp
 N_BVP = 600       # Nombre de points de discrétisation pour l'équation d'Euler-Lagrange
 
 # Résolution de la carte de phase (Taille finale de l'image PNG : N_IMAGE x N_IMAGE)
@@ -72,7 +59,43 @@ def compute_I(y, R, sol_bvp):
 # 4. EXÉCUTION DU CALCUL
 # =============================================================================
 if __name__ == "__main__":
-    
+   
+    # --- Configuration du parseur d'arguments ---
+    parser = argparse.ArgumentParser(description="Résolution du mode curling avec paramètres personnalisés.")
+
+    parser.add_argument('--A',  type=float, default = 1.3e-11, help="Constante d'échange (J/m)")
+    parser.add_argument('--Ku', type=float, default = -1e4, help="Constante d'anisotropie uniaxiale (J/m^3)")
+    parser.add_argument('--Ms', type=float, default = 1.00531 / mu_0, help="Aimantation (A/m)")
+    parser.add_argument('--R',  type=float, default = 100, help="Rayon extérieur du cylindre (nm)")
+
+    args = parser.parse_args()
+
+    # --- Rendre les variables globales pour les fonctions du script ---
+    global A, Ku, Ms, R, kappa, epsilon, r0
+
+    # Constantes du matériau (Unités SI)
+    A = args.A  # Constante d'échange (J/m)
+    Ku = args.Ku # Constante d'anisotropie uniaxiale (J/m^3)
+    Ms = args.Ms # Aimantation (A/m)
+
+    # Constante geometrique
+    R = args.R *1e-9 # Rayon exterieur en m
+
+    # --- Calcul des variables dépendantes ---
+    r0 = R * 1e-6    # Rayon de cœur (singularité numérique évitée), très petit devant R 
+    kappa = (Ku * R**2) / (2 * A) # grandeur adimensionnelle
+    epsilon = r0 / R # parametre adimensionnel
+
+    # --- Affichage des arguments dans le terminal ---
+    print("\n" + "="*50)
+    print("PARAMÈTRES DE LA SIMULATION EN COURS :")
+    print(f" -> A  : {A:.2e} J/m")
+    print(f" -> Ku : {Ku:.2e} J/m^3")
+    print(f" -> Ms : {Ms:.2e} A/m")
+    print(f" -> R  : {R*1e9:.1f} nm")
+    print(f" -> kappa (calculé)   : {kappa:.4f}")
+    print("="*50 + "\n")
+
     # --- Détermination dynamique du répertoire du script ---
     # Cette variable pointe de manière absolue vers le dossier contenant ce fichier .py
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
