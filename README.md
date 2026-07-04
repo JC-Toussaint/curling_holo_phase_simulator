@@ -29,7 +29,7 @@ $$\kappa = \frac{K_u R^2}{2A}$$
 Le script de simulation est articulé autour de 4 étapes clés :
 1. **Résolution du Problème aux Limites (BVP) :** Détermination de l'angle d'aimantation $\omega(\rho)$ à l'aide de l'algorithme `scipy.integrate.solve_bvp`[cite: 5].
 2. **Projection Magnétique :** Calcul de l'intégrale de projection $I(y)$ le long de la ligne de visée du faisceau d'électrons ($z$)[cite: 6, 7]. L'évaluation est vectorisée via `np.vectorize` et calculée par quadrature numérique (`scipy.integrate.quad`)[cite: 9].
-3. **Intégration de la Phase :** Calcul de la phase cumulative $\Phi(y)$ par la méthode des trapèzes[cite: 11]. Une correction est appliquée pour garantir une phase nulle au centre ($\Phi(0) = 0$)[cite: 11].
+3. **Intégration de la Phase :** Calcul de la phase cumulative $\Phi(y)$ par la méthode des trapèzes[cite: 11]. On utilise l'anti-symétie de la phase, imposant $\Phi(0) = 0$ au centre[cite: 11].
 4. **Génération 2D :** Duplication du profil 1D (via `np.tile`) pour générer une image 2D invariante selon l'axe longitudinal, convertie et enregistrée au format `uint16` (16 bits non signés)[cite: 13].
 
 ---
@@ -44,7 +44,7 @@ Soumise aux conditions aux limites[cite: 5]:
 $$\omega(\epsilon) = 0 \quad \text{et} \quad \omega'(1) = 0$$
 
 ### 2. Intégrale de Projection $I(y)$
-Pour chaque coordonnée d'impact transverse $y \in [-R, R]$, l'intégration le long de la ligne de visée géométrique $z_{\text{max}}(y) = \sqrt{R^2 - y^2}$ donne[cite: 7, 8, 9]:
+Pour chaque abscisse $y \in [0, R]$, l'intégration le long de la ligne de visée géométrique $z_{\text{max}}(y) = \sqrt{R^2 - y^2}$ donne[cite: 7, 8, 9]:
 $$I(y) = -\mu_0 M_s \int_{-z_{\text{max}}(y)}^{z_{\text{max}}(y)} \cos\big(\omega(\rho)\big) \, \mathrm{d}z$$
 où la position radiale locale est $\rho = \frac{\sqrt{y^2 + z^2}}{R}$[cite: 8].
 
