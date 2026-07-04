@@ -177,8 +177,12 @@ if __name__ == "__main__":
     phase_min, phase_max = np.min(phase_vals), np.max(phase_vals)
     
     # Texte à afficher (utilisant les expressions LaTeX pour les symboles grecs)
-    info_text = f"$\\Phi_{{min}}$: {phase_min:.4f} rad\n$\\Phi_{{max}}$: {phase_max:.4f} rad"
-    
+    info_text = (
+        f"$\\Phi_{{min}}$: {phase_min:.4f} rad\n"
+        f"$\\Phi_{{max}}$: {phase_max:.4f} rad\n"
+        f"$R$: {R*1e9:.1f} nm"
+    )
+
     # Placement du texte en coordonnées relatives du graphique (0.05 = 5% du bord gauche, 0.80 = 80% du bas)
     plt.text(0.05, 0.80, info_text, transform=plt.gca().transAxes,
              fontsize=10, verticalalignment='top',
@@ -187,7 +191,7 @@ if __name__ == "__main__":
 
     plt.xlabel(r'$y$ [nm]')
     plt.ylabel(r'$\Phi(y)$ [rad]')
-    plt.title(r'Profil de la phase Holographique $\Phi(y)$')
+    plt.title(r'Profil de la Phase Holographique $\Phi(y)$')
     plt.grid(alpha=0.3)
     plt.tight_layout()
     plt.savefig(os.path.join(SCRIPT_DIR, 'phase_profile_y.png'), dpi=150)
