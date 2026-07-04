@@ -11,16 +11,16 @@ import os
 # 1. PARAMÈTRES PHYSIQUES & CONFIGURATION
 # =============================================================================
 # Constantes du matériau (Unités SI)
-A  = 1.3e-11      # Constante d'échange (J/m)
-Ku = -1e4         # Constante d'anisotropie effective (J/m^3)
-Ms = 1.00531 / mu_0
+A  = 1.3e-11        # Constante d'échange (J/m)
+Ku = -1e4           # Constante d'anisotropie uniaxiale (J/m^3)
+Ms = 1.00531 / mu_0 # Aimantation (A/m)
 
 # Géométrie du cylindre
 R  = 100e-9       # Rayon extérieur du cylindre (m)
 r0 = R * 1e-6     # Rayon de cœur (singularité numérique évitée), très petit devant R
 
 # Paramètres adimensionnels et discrétisation pour solve_bvp
-kappa = (Ku * R**2) / (2 * A)
+kappa = (Ku * R**2) / (2 * A) # Parametre adimensionnel
 epsilon = r0 / R  # Limite inférieure du domaine adimensionnel
 N_BVP = 600       # Nombre de points de discrétisation pour l'équation d'Euler-Lagrange
 
@@ -55,7 +55,7 @@ def integrand_z(z, y, R, sol_bvp):
     omega = sol_bvp(rho)[0]
     
     if r == 0:
-        return 0.0
+        return 1.0
     return np.cos(omega)
 
 def compute_I(y, R, sol_bvp):
