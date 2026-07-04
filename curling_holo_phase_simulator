@@ -7,6 +7,7 @@ from PIL import Image
 from PIL.PngImagePlugin import PngInfo  # <--- Ajout pour gérer les métadonnées PNG
 
 from scipy.constants import e, hbar, mu_0
+import sys
 import os
 import argparse
 
@@ -63,12 +64,29 @@ def compute_I(y, R, sol_bvp):
 if __name__ == "__main__":
    
     # --- Configuration du parseur d'arguments ---
-    parser = argparse.ArgumentParser(description="Résolution du mode curling avec paramètres personnalisés.")
+    description_text = "Résolution du mode curling avec paramètres personnalisés."
+    
+    exemples = """
+    exemples d'utilisation :
+         %(prog)s --Ku=-1e4 --R 200
+         %(prog)s --A 1.5e-11 --Ku=-5e3 --R 120
+    """
+
+    parser = argparse.ArgumentParser(
+        description=description_text,
+        epilog=exemples,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        prefix_chars='-+'  # Permet de mieux gérer les signes moins et plus
+    )
 
     parser.add_argument('--A',  type=float, default = 1.3e-11, help="Constante d'échange (J/m)")
     parser.add_argument('--Ku', type=float, default = -1e4, help="Constante d'anisotropie uniaxiale (J/m^3)")
     parser.add_argument('--Ms', type=float, default = 1.00531 / mu_0, help="Aimantation (A/m)")
     parser.add_argument('--R',  type=float, default = 100, help="Rayon extérieur du cylindre (nm)")
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(0)
 
     args = parser.parse_args()
 
@@ -115,7 +133,10 @@ if __name__ == "__main__":
     # --- Étape B : Résolution de l'EDO (BVP) ---
     rho_grid = np.linspace(epsilon, 1.0, N_BVP)
     # Profil 'guess' linéaire pour forcer le solveur vers la solution non triviale
-    omega_guess = (np.pi / 2) * (rho_grid - epsilon) / (1.0 - epsilon)
+    if Ku<0:
+        omega_guess = (np.pi / 2) * (rho_grid - epsilon) / (1.0 - epsilon)
+    else:
+        omega_guess = 0*rho_grid
     y_guess = np.vstack([omega_guess, np.gradient(omega_guess, rho_grid)])
 
     sol = solve_bvp(ode_curling, bc_curling, rho_grid, y_guess, tol=1e-7, max_nodes=1000000)
