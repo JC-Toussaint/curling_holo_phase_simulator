@@ -218,7 +218,7 @@ if __name__ == "__main__":
     phase_map_2d = np.tile(phase_16bit, (N_IMAGE, 1))
 
     # Génération de l'image grayscale 16-bits
-    img = Image.fromarray(phase_map_2d, mode='I;16')
+    img = Image.fromarray(phase_map_2d)
     
     # --- Création de l'objet Métadonnées ---
     metadata = PngInfo()
