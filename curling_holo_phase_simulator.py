@@ -214,3 +214,9 @@ if __name__ == "__main__":
     img.save(output_image_path, pnginfo=metadata)  # <--- Passage des métadonnées ici
 
     print(f"[Succès] Image 16-bits (avec métadonnées) sauvegardée dans :\n -> {output_image_path}")
+
+    # Afficher l'image
+    plt.imshow(img, cmap="gray")
+    # plt.axis("off")  # Masque les axes gradués (optionnel)
+    plt.show()
+
