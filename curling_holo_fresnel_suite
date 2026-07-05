@@ -135,6 +135,8 @@ if __name__ == "__main__":
     parser.add_argument("--defocus", type=float, default=2e-6)
     parser.add_argument("--E0", type=float, default=200e3)
     parser.add_argument("--Cs", type=float, default=1.2e-3)
+    parser.add_argument("--Ce", type=float, default=7.288E6)
+    parser.add_argument("--V0", type=float, default=20)
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -157,6 +159,8 @@ if __name__ == "__main__":
     defocus = args.defocus # Defocus (m)
     E0 = args.E0
     Cs = args.Cs
+    Ce = args.Ce
+    V0 = args.V0
 
     # --- Calcul des variables dépendantes ---
     r0 = R * 1e-6    # Rayon de cœur (singularité numérique évitée), très petit devant R 
@@ -173,7 +177,9 @@ if __name__ == "__main__":
     print(f" -> kappa (calculé)   : {kappa:.4f}\n")
     print(f" -> defocus : {defocus:.4e} m")
     print(f" -> E0 : {E0:.4e} eV")
-    print(f" -> Cs : {Cs:.4e} ")
+    print(f" -> Cs : {Cs:.4e} m")
+    print(f" -> Ce : {Ce:.4e}")
+    print(f" -> V0 : {Cs:.4e} V")
     print("="*50 + "\n")
 
     # --- Détermination dynamique du répertoire du script ---
@@ -221,6 +227,14 @@ if __name__ == "__main__":
     # anti-symetrisation
     y_vals = np.concatenate((-y_vals[:1:-1], y_vals))
     phase_vals = np.concatenate((-phase_vals[:1:-1], phase_vals))
+
+    # Ajout du déphasage du potentiel interieur
+    thick_vals = 2 * np.sqrt(np.maximum(0, R**2 - y_vals**2))
+    phase_vals += Ce*V0 * thick_vals
+
+    plt.figure(figsize=(6, 4))
+    plt.plot(y_vals, thick_vals, '-', lw=2.5, color='tab:orange')
+    plt.show()
 
     # =============================================================================
     # 5. GÉNÉRATION DES GRAPHIQUES ET SAUVEGARDES
@@ -331,8 +345,8 @@ if __name__ == "__main__":
     plt.show()
 
 # Calcul du pas d'échantillonnage horizontal (mètres par pixel)
-    # L'axe y_vals va de -2*R à 2*R, soit une largeur totale de 4*R
-    dy = (4 * R) / N_IMAGE
+    # L'axe y_vals va de -2*R à bound=2*R, soit une largeur totale de 4*R
+    dy = (2 * bound) / N_IMAGE
 
     print(f"[Fresnel] Simulation 1D (Miroir gauche)...")
     # Appel de la fonction avec le vecteur phase_vals (déjà calculé sur [-2R, 2R])[cite: 1]
