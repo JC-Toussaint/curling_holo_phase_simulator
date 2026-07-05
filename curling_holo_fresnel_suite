@@ -305,7 +305,7 @@ if __name__ == "__main__":
     metadata = PngInfo()
     
     # Ajout des paramètres de simulation (les valeurs doivent impérativement être des chaînes 'str')
-    metadata.add_text("Simulation_Type", "Curling Mode Phase Map")
+    metadata.add_text("Simulation_Type", "Curling Holo Fresnel Suite - Phase Map")
     metadata.add_text("Param_A", str(A))
     metadata.add_text("Param_Ku", str(Ku))
     metadata.add_text("Param_Ms", str(Ms))
@@ -363,7 +363,7 @@ if __name__ == "__main__":
     metadata_fresnel = PngInfo()
 
     # Ajout des paramètres de simulation sous forme de chaînes 'str'
-    metadata_fresnel.add_text("Simulation_Type", "Fresnel Contrast Image")
+    metadata_fresnel.add_text("Simulation_Type", "Curling Holo Fresnel Suite - Fresnel Contrast")
     metadata_fresnel.add_text("Param_A", str(A))
     metadata_fresnel.add_text("Param_Ku", str(Ku))
     metadata_fresnel.add_text("Param_Ms", str(Ms))
