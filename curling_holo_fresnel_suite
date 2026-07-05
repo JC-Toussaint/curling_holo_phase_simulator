@@ -222,7 +222,7 @@ if __name__ == "__main__":
     # --- Étape D : Calcul de la phase Phi(y) ---
     # Intégration par la méthode des trapèzes
     phase_vals = cumulative_trapezoid(I_vals, y_vals, initial=0)
-    phase_vals *= -e_c / hbar
+    phase_vals *= e_c / hbar
 
     # anti-symetrisation
     y_vals = np.concatenate((-y_vals[:1:-1], y_vals))
