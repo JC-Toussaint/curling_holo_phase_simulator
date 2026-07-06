@@ -60,53 +60,6 @@ def compute_I(y, R, sol_bvp):
     epsrel=1e-10)
     return -mu_0 * Ms * res
 
-def relativistic_wavelength(E_eV):
-    # Constantes physiques 
-    h = 2*np.pi*hbar
-    m0 = electron_mass
-    E = E_eV * e_c
-    p = np.sqrt(E**2 + 2*E*m0*c**2) / c
-    return h / p
-
-def simulate_fresnel_1d(phase_1d, dy, E0_eV=200e3, defocus=2e-6, Cs=1.2e-3):
-    """
-    Simule la propagation de Fresnel en 1D avec un padding miroir horizontal,
-    en exploitant l'invariance selon la direction perpendiculaire.
-    """
-    # Longueur d'onde relativiste
-    lam = relativistic_wavelength(E0_eV)
-
-    Nx = len(phase_1d)
-
-    # Padding miroir horizontal (gauche / droite)
-    left_half = phase_1d[::-1]
-    right_half = phase_1d
-
-    # Vecteur paddé horizontalement (taille 2 * Nx)
-    phase_pad = np.concatenate((left_half, right_half))
-
-    Nx_pad = len(phase_pad)
-    psi0 = np.exp(1j * phase_pad)
-
-    # Grille de fréquences spatiales 1D sur l'axe horizontal
-    kx = np.fft.fftfreq(Nx_pad, d=dy)
-    k2 = kx**2  # Invariance verticale -> ky = 0, donc k² = kx²
-
-    # Fonction d'aberration (défocus + Cs)
-    chi = np.pi * lam * defocus * k2 + 0.5 * np.pi * Cs * (lam**3) * (k2**2)
-    H = np.exp(-1j * chi)
-
-    # Propagation 1D via FFT
-    Psi0 = np.fft.fftshift(np.fft.fft(np.fft.ifftshift(psi0)))
-    Psi_def = Psi0 * H
-    psi_def = np.fft.fftshift(np.fft.ifft(np.fft.ifftshift(Psi_def)))
-
-    # Extraction du quadrant original (la moitié droite -> [Nx:2*Nx])
-    psi_def_crop = psi_def[Nx:2*Nx]
-
-    # Intensité (Contraste de Fresnel)
-    return np.abs(psi_def_crop)**2
-
 # =============================================================================
 # 4. EXÉCUTION DU CALCUL
 # =============================================================================
@@ -132,11 +85,6 @@ if __name__ == "__main__":
     parser.add_argument('--Ku', type=float, default = -1e4, help="Constante d'anisotropie uniaxiale (J/m^3)")
     parser.add_argument('--Ms', type=float, default = 1.00531 / mu_0, help="Aimantation (A/m)")
     parser.add_argument('--R',  type=float, default = 100e-9, help="Rayon extérieur du cylindre (m)")
-    parser.add_argument("--defocus", type=float, default=2e-6)
-    parser.add_argument("--E0", type=float, default=200e3)
-    parser.add_argument("--Cs", type=float, default=1.2e-3)
-    parser.add_argument("--Ce", type=float, default=7.288E6)
-    parser.add_argument("--V0", type=float, default=20)
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -155,13 +103,6 @@ if __name__ == "__main__":
     # Constante geometrique
     R = args.R # Rayon exterieur en m
 
-    # Parametres du microscope
-    defocus = args.defocus # Defocus (m)
-    E0 = args.E0
-    Cs = args.Cs
-    Ce = args.Ce
-    V0 = args.V0
-
     # --- Calcul des variables dépendantes ---
     r0 = R * 1e-6    # Rayon de cœur (singularité numérique évitée), très petit devant R 
     kappa = (Ku * R**2) / (2 * A) # grandeur adimensionnelle
@@ -175,11 +116,6 @@ if __name__ == "__main__":
     print(f" -> Ms : {Ms:.2e} A/m")
     print(f" -> R  : {R:.2e} m")
     print(f" -> kappa (calculé)   : {kappa:.4f}\n")
-    print(f" -> defocus : {defocus:.4e} m")
-    print(f" -> E0 : {E0:.4e} eV")
-    print(f" -> Cs : {Cs:.4e} m")
-    print(f" -> Ce : {Ce:.4e}")
-    print(f" -> V0 : {Cs:.4e} V")
     print("="*50 + "\n")
 
     # --- Détermination dynamique du répertoire du script ---
@@ -228,17 +164,8 @@ if __name__ == "__main__":
     y_vals = np.concatenate((-y_vals[:1:-1], y_vals))
     phase_vals = np.concatenate((-phase_vals[:1:-1], phase_vals))
 
-    # Ajout du déphasage du potentiel interieur
-    thick_vals = 2 * np.sqrt(np.maximum(0, R**2 - y_vals**2))
-    print('Add electrostatic phase')
-    phase_vals += Ce*V0 * thick_vals
-
     vmin, vmax = phase_vals.min(), phase_vals.max()
     print(f"phase : [{vmin:.6g}, {vmax:.6g}]")
-
-#    plt.figure(figsize=(6, 4))
-#    plt.plot(y_vals, thick_vals, '-', lw=2.5, color='tab:orange')
-#    plt.show()
 
     # =============================================================================
     # 5. GÉNÉRATION DES GRAPHIQUES ET SAUVEGARDES
@@ -253,7 +180,7 @@ if __name__ == "__main__":
     plt.title("Profil adimensionné du mode curling")
     plt.grid(alpha=0.3)
     plt.tight_layout()
-    plt.savefig(os.path.join(SCRIPT_DIR, 'curling_mode_adimensionne.png'), dpi=150)
+    plt.savefig(os.path.join(SCRIPT_DIR, 'curling_mode_adim.png'), dpi=150)
     plt.show()
     #plt.close()
 
@@ -300,8 +227,13 @@ if __name__ == "__main__":
     #plt.close()
 
     # =============================================================================
-    # 6. EXPORT CARTE DE PHASE INTERFÉROMÉTRIQUE (PNG 16-BITS) + MÉTADONNÉES
+    # 6. EXPORT CARTE DE PHASE HOLOGRAPHIQUE (PNG 16-BITS) + MÉTADONNÉES
     # =============================================================================
+
+    # Calcul du pas d'échantillonnage horizontal (mètres par pixel)
+    # L'axe y_vals va de -2*R à bound=2*R, soit une largeur totale de 4*R
+    dx, dy = (2 * bound) / N_IMAGE, (2 * bound) / N_IMAGE
+
     print(f"[Image] Phase min : {phase_min:.4e} | Phase max : {phase_max:.4e}")
 
     # Normalisation linéaire stricte dans la dynamique de codage 16-bits [0, 65535]
@@ -331,11 +263,17 @@ if __name__ == "__main__":
     metadata.add_text("Param_r0", str(r0))
     metadata.add_text("Param_kappa", str(kappa))
     metadata.add_text("Param_N_IMAGE", str(N_IMAGE))
-    
+   
+    metadata.add_text("Subject Units", "meters")
+    metadata.add_text("Pixel Width",  str(dx))
+    metadata.add_text("Pixel Height", str(dy))
+    metadata.add_text("Pixel Unit", "m")
+
     # Très important pour pouvoir refaire la simulation ou reconstruire les vraies valeurs de Phase :
     # On stocke les extrema qui ont servi à la normalisation [0, 65535]
-    metadata.add_text("Phase_Min_SI", str(phase_min))
-    metadata.add_text("Phase_Max_SI", str(phase_max))
+    metadata.add_text("Value Min", str(phase_min))
+    metadata.add_text("Value Max", str(phase_max))
+    metadata.add_text("Value Unit", "rad")
 
     # Sauvegarde forcée dans SCRIPT_DIR en transmettant l'objet pnginfo
     output_image_path = os.path.join(SCRIPT_DIR, 'analytics_HOLO_PHASE.png')
@@ -348,69 +286,58 @@ if __name__ == "__main__":
     # plt.axis("off")  # Masque les axes gradués (optionnel)
     plt.show()
 
-# Calcul du pas d'échantillonnage horizontal (mètres par pixel)
-    # L'axe y_vals va de -2*R à bound=2*R, soit une largeur totale de 4*R
-    dy = (2 * bound) / N_IMAGE
+    # Profil d'epaisseur
+    thick_vals = 2 * np.sqrt(np.maximum(0, R**2 - y_vals**2))
 
-    print(f"[Fresnel] Simulation 1D (Miroir gauche)...")
-    # Appel de la fonction avec le vecteur phase_vals (déjà calculé sur [-2R, 2R])[cite: 1]
-    fresnel_profile_1d = simulate_fresnel_1d(phase_vals, dy, E0_eV=E0, defocus=defocus, Cs=Cs)
-
-    # DUPLICATION VERTICALE : Le profil varie horizontalement et se répète verticalement
-    fresnel_map_2d = np.tile(fresnel_profile_1d, (N_IMAGE, 1))
-
-    # =============================================================================
-    # 7. EXPORT DU CONTRASTE DE FRESNEL (PNG 16-BITS) + MÉTADONNÉES
-    # =============================================================================
-    fresnel_min, fresnel_max = np.min(fresnel_map_2d), np.max(fresnel_map_2d)
-    print(f"[Image Fresnel] Intensité min : {fresnel_min:.4e} | Intensité max : {fresnel_max:.4e}")
+    # --- VALEURS EXTREMA ---
+    thick_min, thick_max = np.min(thick_vals), np.max(thick_vals)
 
     # Normalisation linéaire stricte dans la dynamique de codage 16-bits [0, 65535]
-    if fresnel_max != fresnel_min:
-        fresnel_normalized = (fresnel_map_2d - fresnel_min) / (fresnel_max - fresnel_min) * 65535
+    if thick_max != thick_min:
+        thick_normalized = (thick_vals - thick_min) / (thick_max - thick_min) * 65535
     else:
-        fresnel_normalized = np.zeros_like(fresnel_map_2d)
+        thick_normalized = np.zeros_like(thick_vals)
 
     # Mutation explicite du tableau vers le type d'entier non-signé 16 bits
-    fresnel_16bit = fresnel_normalized.astype(np.uint16)
+    thick_16bit = thick_normalized.astype(np.uint16)
+
+    # Création de la matrice bidimensionnelle 2D (invariance stricte de la phase selon l'axe z)
+    thick_map_2d = np.tile(thick_16bit, (N_IMAGE, 1))
 
     # Génération de l'image grayscale 16-bits
-    img_fresnel = Image.fromarray(fresnel_16bit)
+    img = Image.fromarray(thick_map_2d)
 
     # --- Création de l'objet Métadonnées ---
-    metadata_fresnel = PngInfo()
+    metadata = PngInfo()
 
-    # Ajout des paramètres de simulation sous forme de chaînes 'str'
-    metadata_fresnel.add_text("Simulation_Type", "Curling Holo Fresnel Suite - Fresnel Contrast")
-    metadata_fresnel.add_text("Param_A", str(A))
-    metadata_fresnel.add_text("Param_Ku", str(Ku))
-    metadata_fresnel.add_text("Param_Ms", str(Ms))
-    metadata_fresnel.add_text("Param_R", str(R))
-    metadata_fresnel.add_text("Param_N_IMAGE", str(N_IMAGE))
+    # Ajout des paramètres de simulation (les valeurs doivent impérativement être des chaînes 'str')
+    metadata.add_text("Simulation_Type", "Curling Holo Fresnel Suite - Thick Map")
+    metadata.add_text("Param_A", str(A))
+    metadata.add_text("Param_Ku", str(Ku))
+    metadata.add_text("Param_Ms", str(Ms))
+    metadata.add_text("Param_R", str(R))
+    metadata.add_text("Param_r0", str(r0))
+    metadata.add_text("Param_kappa", str(kappa))
+    metadata.add_text("Param_N_IMAGE", str(N_IMAGE))
 
-    # Paramètres spécifiques à la simulation de Fresnel
-    metadata_fresnel.add_text("Param_E0_eV", str(E0))
-    metadata_fresnel.add_text("Param_Defocus", str(defocus))
-    metadata_fresnel.add_text("Param_Cs", str(Cs))
-    metadata_fresnel.add_text("Pixel_Width", str(dy))  # dx = dy
+    metadata.add_text("Subject Units", "meters")
+    metadata.add_text("Pixel Width",  str(dx))
+    metadata.add_text("Pixel Height", str(dy))
+    metadata.add_text("Pixel Unit", "m")
 
-    # Stockage des extrema d'intensité pour pouvoir décoder le PNG si nécessaire
-    metadata_fresnel.add_text("Value_Min", str(fresnel_min))
-    metadata_fresnel.add_text("Value_Max", str(fresnel_max))
+    # Très important pour pouvoir refaire la simulation ou reconstruire les vraies valeurs de Phase :
+    # On stocke les extrema qui ont servi à la normalisation [0, 65535]
+    metadata.add_text("Value Min", str(thick_min))
+    metadata.add_text("Value Max", str(thick_max))
+    metadata.add_text("Value Unit", "m")
 
     # Sauvegarde forcée dans SCRIPT_DIR en transmettant l'objet pnginfo
-    output_fresnel_image_path = os.path.join(SCRIPT_DIR, 'fresnel.png')
-    img_fresnel.save(output_fresnel_image_path, pnginfo=metadata_fresnel)
+    output_image_path = os.path.join(SCRIPT_DIR, 'analytics_PATH_LENGTH.png')
+    img.save(output_image_path, pnginfo=metadata)  # Passage des métadonnées 
 
-    print(f"[Succès] Image Fresnel 16-bits (avec métadonnées) sauvegardée dans :\n -> {output_fresnel_image_path}")
+    print(f"[Succès] Image 16-bits (avec métadonnées) sauvegardée dans :\n -> {output_image_path}")
 
     # Afficher l'image
-    plt.figure()
-    extent_nm = (-bound*1e9, bound*1e9, -bound*1e9, bound*1e9)
-    # ATTENTION fresnel_map_2d image non normalisée
-    #plt.imshow(img_fresnel, cmap="gray", extent=extent_nm)
-    plt.imshow(fresnel_map_2d, cmap="gray", extent=extent_nm)
-    plt.colorbar(label="Intensity")
-    plt.title("Contraste de Fresnel (Visualisation PNG 16-bits)")
+    plt.imshow(img, cmap="gray")
+    # plt.axis("off")  # Masque les axes gradués (optionnel)
     plt.show()
-
