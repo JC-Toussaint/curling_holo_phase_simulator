@@ -255,7 +255,7 @@ if __name__ == "__main__":
     metadata = PngInfo()
     
     # Ajout des paramètres de simulation (les valeurs doivent impérativement être des chaînes 'str')
-    metadata.add_text("Simulation_Type", "Curling Holo Fresnel Suite - Phase Map")
+    metadata.add_text("Simulation_Type", "Curling Holo Phase Simulator - Phase Map")
     metadata.add_text("Param_A", str(A))
     metadata.add_text("Param_Ku", str(Ku))
     metadata.add_text("Param_Ms", str(Ms))
@@ -311,7 +311,7 @@ if __name__ == "__main__":
     metadata = PngInfo()
 
     # Ajout des paramètres de simulation (les valeurs doivent impérativement être des chaînes 'str')
-    metadata.add_text("Simulation_Type", "Curling Holo Fresnel Suite - Thick Map")
+    metadata.add_text("Simulation_Type", "Curling Holo Phase Simulator - Thick Map")
     metadata.add_text("Param_A", str(A))
     metadata.add_text("Param_Ku", str(Ku))
     metadata.add_text("Param_Ms", str(Ms))
