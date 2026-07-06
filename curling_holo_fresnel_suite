@@ -117,8 +117,8 @@ if __name__ == "__main__":
     
     exemples = """
     exemples d'utilisation :
-         %(prog)s --Ku=-1e4 --R 200
-         %(prog)s --A 1.5e-11 --Ku=-5e3 --R 120
+         %(prog)s --Ku=-1e4 --R 100e-9
+         %(prog)s --A 1.5e-11 --Ku=-2e4 --R 100e-9
     """
 
     parser = argparse.ArgumentParser(
