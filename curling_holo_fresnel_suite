@@ -60,11 +60,11 @@ def compute_I(y, R, sol_bvp):
     epsrel=1e-10)
     return -mu_0 * Ms * res
 
-def relativistic_wavelength(eV):
+def relativistic_wavelength(E_eV):
     # Constantes physiques 
     h = 2*np.pi*hbar
     m0 = electron_mass
-    E = eV * e_c
+    E = E_eV * e_c
     p = np.sqrt(E**2 + 2*E*m0*c**2) / c
     return h / p
 
@@ -222,7 +222,7 @@ if __name__ == "__main__":
     # --- Étape D : Calcul de la phase Phi(y) ---
     # Intégration par la méthode des trapèzes
     phase_vals = cumulative_trapezoid(I_vals, y_vals, initial=0)
-    phase_vals *= e_c / hbar
+    phase_vals *= -e_c / hbar
 
     # anti-symetrisation
     y_vals = np.concatenate((-y_vals[:1:-1], y_vals))
@@ -230,11 +230,12 @@ if __name__ == "__main__":
 
     # Ajout du déphasage du potentiel interieur
     thick_vals = 2 * np.sqrt(np.maximum(0, R**2 - y_vals**2))
-    phase_vals += Ce*V0 * thick_vals
+    print('no electrostatic phase')
+#    phase_vals += Ce*V0 * thick_vals
 
-    plt.figure(figsize=(6, 4))
-    plt.plot(y_vals, thick_vals, '-', lw=2.5, color='tab:orange')
-    plt.show()
+#    plt.figure(figsize=(6, 4))
+#    plt.plot(y_vals, thick_vals, '-', lw=2.5, color='tab:orange')
+#    plt.show()
 
     # =============================================================================
     # 5. GÉNÉRATION DES GRAPHIQUES ET SAUVEGARDES
