@@ -230,8 +230,11 @@ if __name__ == "__main__":
 
     # Ajout du déphasage du potentiel interieur
     thick_vals = 2 * np.sqrt(np.maximum(0, R**2 - y_vals**2))
-    print('no electrostatic phase')
-#    phase_vals += Ce*V0 * thick_vals
+    print('Add electrostatic phase')
+    phase_vals += Ce*V0 * thick_vals
+
+    vmin, vmax = phase_vals.min(), phase_vals.max()
+    print(f"phase : [{vmin:.6g}, {vmax:.6g}]")
 
 #    plt.figure(figsize=(6, 4))
 #    plt.plot(y_vals, thick_vals, '-', lw=2.5, color='tab:orange')
@@ -368,7 +371,7 @@ if __name__ == "__main__":
     else:
         fresnel_normalized = np.zeros_like(fresnel_map_2d)
 
-    # Mutation explicte du tableau vers le type d'entier non-signé 16 bits
+    # Mutation explicite du tableau vers le type d'entier non-signé 16 bits
     fresnel_16bit = fresnel_normalized.astype(np.uint16)
 
     # Génération de l'image grayscale 16-bits
@@ -403,7 +406,11 @@ if __name__ == "__main__":
 
     # Afficher l'image
     plt.figure()
-    plt.imshow(img_fresnel, cmap="gray")
+    extent_nm = (-bound*1e9, bound*1e9, -bound*1e9, bound*1e9)
+    # ATTENTION fresnel_map_2d image non normalisée
+    #plt.imshow(img_fresnel, cmap="gray", extent=extent_nm)
+    plt.imshow(fresnel_map_2d, cmap="gray", extent=extent_nm)
+    plt.colorbar(label="Intensity")
     plt.title("Contraste de Fresnel (Visualisation PNG 16-bits)")
     plt.show()
 
