@@ -16,14 +16,13 @@ import argparse
 # Discrétisation pour solve_bvp
 N_BVP = 600       # Nombre de points de discrétisation pour l'équation d'Euler-Lagrange
 
-# Résolution de la carte de phase (Taille finale de l'image PNG : N_IMAGE x N_IMAGE)
-N_IMAGE = 1000    
 
 # =============================================================================
 # 2. SYSTÈME DIFFÉRENTIEL (EULER-LAGRANGE) & CONDITIONS AUX LIMITES
 # =============================================================================
 def ode_curling(rho, y):
-    """Définition de l'EDO d'Euler-Lagrange adimensionnée pour le mode curling."""
+    """Définition de l'EDO d'Euler-Lagrange 
+ adimensionnée pour le mode curling."""
     omega, domega_drho = y
     d2omega_drho2 = -domega_drho / rho + (1.0 / (2 * rho**2) + kappa) * np.sin(2 * omega)
     return np.vstack([domega_drho, d2omega_drho2])
@@ -38,6 +37,7 @@ def bc_curling(ya, yb):
 def integrand_z(z, y, R, sol_bvp):
     """Fonction à intégrer selon l'axe z pour obtenir le profil I(y)."""
     r = np.sqrt(y**2 + z**2)
+  
     rho = r / R
     
     # Sécurité pour respecter le domaine de définition de la spline [epsilon, 1.0]
@@ -51,7 +51,8 @@ def integrand_z(z, y, R, sol_bvp):
     return np.cos(omega)
 
 def compute_I(y, R, sol_bvp):
-    """Calcule la projection intégrale I pour une coordonnée y donnée."""
+    """Calcule la projection intégrale I pour 
+ une coordonnée y donnée."""
     assert y>=0, 'y must be positive'
     if y>R: y=R
     bound = np.sqrt(R**2 - y**2)
@@ -60,18 +61,24 @@ def compute_I(y, R, sol_bvp):
     epsrel=1e-10)
     return -mu_0 * Ms * res
 
+
 # =============================================================================
-# 4. EXÉCUTION DU CALCUL
+# 4. FONCTIONS DE RESTRUCTURATION (MODULARITÉ)
 # =============================================================================
-if __name__ == "__main__":
-   
-    # --- Configuration du parseur d'arguments ---
+
+def configurer_arguments():
+    """
+    Configure le parseur d'arguments de la ligne de commande.
+    
+    Retourne:
+        argparse.Namespace: Les arguments parsés.
+    """
     description_text = "Résolution du mode curling avec paramètres personnalisés."
     
     exemples = """
     exemples d'utilisation :
-         %(prog)s --Ku=-1e4 --R 100e-9
-         %(prog)s --A 1.5e-11 --Ku=-2e4 --R 100e-9
+         %(prog)s 1000 2e-10 --Ku=-1e4 --R 100e-9
+         %(prog)s 1000 2e-10 --A 1.5e-11 --Ku=-2e4 --R 100e-9
     """
 
     parser = argparse.ArgumentParser(
@@ -81,6 +88,11 @@ if __name__ == "__main__":
         prefix_chars='-+'  # Permet de mieux gérer les signes moins et plus
     )
 
+    # Arguments positionnels obligatoires
+    parser.add_argument('IMAGE_SIZE', type=int, help="Taille finale de l'image PNG (IMAGE_SIZE x IMAGE_SIZE)")
+    parser.add_argument('PIXEL_SIZE', type=float, help="Taille d'un pixel en mètres (remplace dx et dy)")
+
+    # Arguments optionnels
     parser.add_argument('--A',  type=float, default = 1.3e-11, help="Constante d'échange (J/m)")
     parser.add_argument('--Ku', type=float, default = -1e4, help="Constante d'anisotropie uniaxiale (J/m^3)")
     parser.add_argument('--Ms', type=float, default = 1.00531 / mu_0, help="Aimantation (A/m)")
@@ -90,43 +102,24 @@ if __name__ == "__main__":
         parser.print_help()
         sys.exit(0)
 
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    # --- Rendre les variables globales pour les fonctions du script ---
-    global A, Ku, Ms, R, kappa, epsilon, r0
 
-    # Constantes du matériau (Unités SI)
-    A = args.A  # Constante d'échange (J/m)
-    Ku = args.Ku # Constante d'anisotropie uniaxiale (J/m^3)
-    Ms = args.Ms # Aimantation (A/m)
-
-    # Constante geometrique
-    R = args.R # Rayon exterieur en m
-
-    # --- Calcul des variables dépendantes ---
-    r0 = R * 1e-6    # Rayon de cœur (singularité numérique évitée), très petit devant R 
-    kappa = (Ku * R**2) / (2 * A) # grandeur adimensionnelle
-    epsilon = r0 / R # parametre adimensionnel
-
-    # --- Affichage des arguments dans le terminal ---
-    print("\n" + "="*50)
-    print("PARAMÈTRES DE LA SIMULATION EN COURS :")
-    print(f" -> A  : {A:.2e} J/m")
-    print(f" -> Ku : {Ku:.2e} J/m^3")
-    print(f" -> Ms : {Ms:.2e} A/m")
-    print(f" -> R  : {R:.2e} m")
-    print(f" -> kappa (calculé)   : {kappa:.4f}\n")
-    print("="*50 + "\n")
-
-    # --- Détermination dynamique du répertoire du script ---
-    # Cette variable pointe de manière absolue vers le dossier contenant ce fichier .py
-    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-
+def simuler_curling():
+    """
+    Exécute le cœur de la simulation physique : diagnostic de stabilité,
+    résolution du problème aux limites (BVP), calcul de la projection intégrale
+    et de la phase holographique.
+    
+    Retourne:
+        tuple: (rho_grid, omega_bvp, y_vals, phase_vals, thick_vals)
+    """
     # --- Étape A : Estimation de la solution et diagnostic de stabilité ---
     if Ku != 0:
         l_K = np.sqrt(A / abs(Ku))
         Rc = 1.8412 * l_K
         print(f"Rayon critique estimé R_c = {Rc*1e9:.2f} nm (R actuel = {R*1e9:.1f} nm)")
+ 
         if Ku > 0 or R < Rc:
             print(">>> Attention : Configuration stable attendue vers la solution triviale omega(rho) = 0.")
         else:
@@ -135,10 +128,10 @@ if __name__ == "__main__":
     # --- Étape B : Résolution de l'EDO (BVP) ---
     rho_grid = np.linspace(epsilon, 1.0, N_BVP)
     # Profil 'guess' linéaire pour forcer le solveur vers la solution non triviale
-    if Ku<0:
+    if Ku < 0:
         omega_guess = (np.pi / 2) * (rho_grid - epsilon) / (1.0 - epsilon)
     else:
-        omega_guess = 0*rho_grid
+        omega_guess = 0 * rho_grid
     y_guess = np.vstack([omega_guess, np.gradient(omega_guess, rho_grid)])
 
     sol = solve_bvp(ode_curling, bc_curling, rho_grid, y_guess, tol=1e-7, max_nodes=1000000)
@@ -150,9 +143,9 @@ if __name__ == "__main__":
     compute_I_vectorized = np.vectorize(lambda y: compute_I(y, R, sol.sol))
     
     # Génération du maillage fin direct (évite de calculer deux fois avec des tailles de grille différentes)
-    bound = 2*R
-    y_vals = np.linspace(0, bound, N_IMAGE//2+1)
-    print(f"[Calcul] Évaluation de I(y) sur {N_IMAGE} points...")
+    bound = IMAGE_SIZE * PIXEL_SIZE / 2
+    y_vals = np.linspace(0, bound, IMAGE_SIZE // 2 + 1)
+    print(f"[Calcul] Évaluation de I(y) sur {IMAGE_SIZE} points...")
     I_vals = compute_I_vectorized(y_vals)
 
     # --- Étape D : Calcul de la phase Phi(y) ---
@@ -164,12 +157,16 @@ if __name__ == "__main__":
     y_vals = np.concatenate((-y_vals[:1:-1], y_vals))
     phase_vals = np.concatenate((-phase_vals[:1:-1], phase_vals))
 
-    vmin, vmax = phase_vals.min(), phase_vals.max()
-    print(f"phase : [{vmin:.6g}, {vmax:.6g}]")
+    # Calcul du profil d'épaisseur
+    thick_vals = 2 * np.sqrt(np.maximum(0, R**2 - y_vals**2))
 
-    # =============================================================================
-    # 5. GÉNÉRATION DES GRAPHIQUES ET SAUVEGARDES
-    # =============================================================================
+    return rho_grid, omega_bvp, y_vals, phase_vals, thick_vals
+
+
+def generer_graphiques(rho_grid, omega_bvp, y_vals, phase_vals):
+    """
+    Génère et sauvegarde les graphiques de contrôle de la simulation.
+    """
     print("[Graphiques] Génération des tracés de contrôle...")
     
     # Fig 1 : Profil Curling adimensionné
@@ -203,6 +200,7 @@ if __name__ == "__main__":
 
     # --- VALEURS EXTREMA ---
     phase_min, phase_max = np.min(phase_vals), np.max(phase_vals)
+    print(f"phase : [{phase_min:.6g}, {phase_max:.6g}]")
     
     # Texte à afficher (utilisant les expressions LaTeX pour les symboles grecs)
     info_text = (
@@ -226,14 +224,16 @@ if __name__ == "__main__":
     plt.show()
     #plt.close()
 
-    # =============================================================================
-    # 6. EXPORT CARTE DE PHASE HOLOGRAPHIQUE (PNG 16-BITS) + MÉTADONNÉES
-    # =============================================================================
 
-    # Calcul du pas d'échantillonnage horizontal (mètres par pixel)
-    # L'axe y_vals va de -2*R à bound=2*R, soit une largeur totale de 4*R
-    dx, dy = (2 * bound) / N_IMAGE, (2 * bound) / N_IMAGE
-
+def exporter_cartes_16bits(phase_vals, thick_vals):
+    """
+    Génère, normalise et exporte les images 2D en niveaux de gris 16-bits
+    (Carte de phase et Carte d'épaisseur) avec leurs métadonnées respectives.
+    """
+    # -------------------------------------------------------------------------
+    # EXPORT CARTE DE PHASE HOLOGRAPHIQUE (PNG 16-BITS) + MÉTADONNÉES
+    # -------------------------------------------------------------------------
+    phase_min, phase_max = np.min(phase_vals), np.max(phase_vals)
     print(f"[Image] Phase min : {phase_min:.4e} | Phase max : {phase_max:.4e}")
 
     # Normalisation linéaire stricte dans la dynamique de codage 16-bits [0, 65535]
@@ -246,49 +246,47 @@ if __name__ == "__main__":
     phase_16bit = phase_normalized.astype(np.uint16)
 
     # Création de la matrice bidimensionnelle 2D (invariance stricte de la phase selon l'axe z)
-    phase_map_2d = np.tile(phase_16bit, (N_IMAGE, 1))
+    phase_map_2d = np.tile(phase_16bit, (IMAGE_SIZE, 1))
 
     # Génération de l'image grayscale 16-bits
-    img = Image.fromarray(phase_map_2d)
+    img_phase = Image.fromarray(phase_map_2d)
     
     # --- Création de l'objet Métadonnées ---
-    metadata = PngInfo()
-    
-    # Ajout des paramètres de simulation (les valeurs doivent impérativement être des chaînes 'str')
-    metadata.add_text("Simulation_Type", "Curling Holo Phase Simulator - Phase Map")
-    metadata.add_text("Param_A", str(A))
-    metadata.add_text("Param_Ku", str(Ku))
-    metadata.add_text("Param_Ms", str(Ms))
-    metadata.add_text("Param_R", str(R))
-    metadata.add_text("Param_r0", str(r0))
-    metadata.add_text("Param_kappa", str(kappa))
-    metadata.add_text("Param_N_IMAGE", str(N_IMAGE))
+    metadata_phase = PngInfo()
+    metadata_phase.add_text("Simulation_Type", "Curling Holo Phase Simulator - Phase Map")
+    metadata_phase.add_text("Param_A", str(A))
+    metadata_phase.add_text("Param_Ku", str(Ku))
+    metadata_phase.add_text("Param_Ms", str(Ms))
+    metadata_phase.add_text("Param_R", str(R))
+    metadata_phase.add_text("Param_r0", str(r0))
+    metadata_phase.add_text("Param_kappa", str(kappa))
+    metadata_phase.add_text("Param_IMAGE_SIZE", str(IMAGE_SIZE))
    
-    metadata.add_text("Subject Units", "meters")
-    metadata.add_text("Pixel Width",  str(dx))
-    metadata.add_text("Pixel Height", str(dy))
-    metadata.add_text("Pixel Unit", "m")
+    metadata_phase.add_text("Subject Units", "meters")
+    metadata_phase.add_text("Pixel Width",  str(PIXEL_SIZE))
+    metadata_phase.add_text("Pixel Height", str(PIXEL_SIZE))
+    metadata_phase.add_text("Pixel Unit", "m")
 
     # Très important pour pouvoir refaire la simulation ou reconstruire les vraies valeurs de Phase :
     # On stocke les extrema qui ont servi à la normalisation [0, 65535]
-    metadata.add_text("Value Min", str(phase_min))
-    metadata.add_text("Value Max", str(phase_max))
-    metadata.add_text("Value Unit", "rad")
+    metadata_phase.add_text("Value Min", str(phase_min))
+    metadata_phase.add_text("Value Max", str(phase_max))
+    metadata_phase.add_text("Value Unit", "rad")
 
     # Sauvegarde forcée dans SCRIPT_DIR en transmettant l'objet pnginfo
-    output_image_path = os.path.join(SCRIPT_DIR, 'analytics_HOLO_PHASE.png')
-    img.save(output_image_path, pnginfo=metadata)  # <--- Passage des métadonnées ici
+    output_image_path_phase = os.path.join(SCRIPT_DIR, 'analytics_HOLO_PHASE.png')
+    img_phase.save(output_image_path_phase, pnginfo=metadata_phase)
 
-    print(f"[Succès] Image 16-bits (avec métadonnées) sauvegardée dans :\n -> {output_image_path}")
+    print(f"[Succès] Image 16-bits (avec métadonnées) sauvegardée dans :\n -> {output_image_path_phase}")
 
     # Afficher l'image
-    plt.imshow(img, cmap="gray")
+    plt.imshow(img_phase, cmap="gray")
     # plt.axis("off")  # Masque les axes gradués (optionnel)
     plt.show()
 
-    # Profil d'epaisseur
-    thick_vals = 2 * np.sqrt(np.maximum(0, R**2 - y_vals**2))
-
+    # -------------------------------------------------------------------------
+    # EXPORT CARTE D'ÉPAISSEUR (PNG 16-BITS) + MÉTADONNÉES
+    # -------------------------------------------------------------------------
     # --- VALEURS EXTREMA ---
     thick_min, thick_max = np.min(thick_vals), np.max(thick_vals)
 
@@ -302,42 +300,90 @@ if __name__ == "__main__":
     thick_16bit = thick_normalized.astype(np.uint16)
 
     # Création de la matrice bidimensionnelle 2D (invariance stricte de la phase selon l'axe z)
-    thick_map_2d = np.tile(thick_16bit, (N_IMAGE, 1))
+    thick_map_2d = np.tile(thick_16bit, (IMAGE_SIZE, 1))
 
     # Génération de l'image grayscale 16-bits
-    img = Image.fromarray(thick_map_2d)
+    img_thick = Image.fromarray(thick_map_2d)
 
     # --- Création de l'objet Métadonnées ---
-    metadata = PngInfo()
+    metadata_thick = PngInfo()
+    metadata_thick.add_text("Simulation_Type", "Curling Holo Phase Simulator - Thick Map")
+    metadata_thick.add_text("Param_A", str(A))
+    metadata_thick.add_text("Param_Ku", str(Ku))
+    metadata_thick.add_text("Param_Ms", str(Ms))
+    metadata_thick.add_text("Param_R", str(R))
+    metadata_thick.add_text("Param_r0", str(r0))
+    metadata_thick.add_text("Param_kappa", str(kappa))
+    metadata_thick.add_text("Param_IMAGE_SIZE", str(IMAGE_SIZE))
 
-    # Ajout des paramètres de simulation (les valeurs doivent impérativement être des chaînes 'str')
-    metadata.add_text("Simulation_Type", "Curling Holo Phase Simulator - Thick Map")
-    metadata.add_text("Param_A", str(A))
-    metadata.add_text("Param_Ku", str(Ku))
-    metadata.add_text("Param_Ms", str(Ms))
-    metadata.add_text("Param_R", str(R))
-    metadata.add_text("Param_r0", str(r0))
-    metadata.add_text("Param_kappa", str(kappa))
-    metadata.add_text("Param_N_IMAGE", str(N_IMAGE))
-
-    metadata.add_text("Subject Units", "meters")
-    metadata.add_text("Pixel Width",  str(dx))
-    metadata.add_text("Pixel Height", str(dy))
-    metadata.add_text("Pixel Unit", "m")
+    metadata_thick.add_text("Subject Units", "meters")
+    metadata_thick.add_text("Pixel Width",  str(PIXEL_SIZE))
+    metadata_thick.add_text("Pixel Height", str(PIXEL_SIZE))
+    metadata_thick.add_text("Pixel Unit", "m")
 
     # Très important pour pouvoir refaire la simulation ou reconstruire les vraies valeurs de Phase :
     # On stocke les extrema qui ont servi à la normalisation [0, 65535]
-    metadata.add_text("Value Min", str(thick_min))
-    metadata.add_text("Value Max", str(thick_max))
-    metadata.add_text("Value Unit", "m")
+    metadata_thick.add_text("Value Min", str(thick_min))
+    metadata_thick.add_text("Value Max", str(thick_max))
+    metadata_thick.add_text("Value Unit", "m")
 
     # Sauvegarde forcée dans SCRIPT_DIR en transmettant l'objet pnginfo
-    output_image_path = os.path.join(SCRIPT_DIR, 'analytics_PATH_LENGTH.png')
-    img.save(output_image_path, pnginfo=metadata)  # Passage des métadonnées 
+    output_image_path_thick = os.path.join(SCRIPT_DIR, 'analytics_PATH_LENGTH.png')
+    img_thick.save(output_image_path_thick, pnginfo=metadata_thick)
 
-    print(f"[Succès] Image 16-bits (avec métadonnées) sauvegardée dans :\n -> {output_image_path}")
+    print(f"[Succès] Image 16-bits (avec métadonnées) sauvegardée dans :\n -> {output_image_path_thick}")
 
     # Afficher l'image
-    plt.imshow(img, cmap="gray")
+    plt.imshow(img_thick, cmap="gray")
     # plt.axis("off")  # Masque les axes gradués (optionnel)
     plt.show()
+
+
+# =============================================================================
+# 5. EXECUTION PRINCIPALE
+# =============================================================================
+if __name__ == "__main__":
+   
+    # 1. Gestion et parsing des arguments
+    args = configurer_arguments()
+
+    # --- Rendre les variables globales pour les fonctions du script ---
+    global A, Ku, Ms, R, kappa, epsilon, r0, IMAGE_SIZE, PIXEL_SIZE
+
+    # Récupération des arguments positionnels et optionnels
+    IMAGE_SIZE = args.IMAGE_SIZE
+    PIXEL_SIZE = args.PIXEL_SIZE
+    A = args.A          # Constante d'échange (J/m)
+    Ku = args.Ku        # Constante d'anisotropie uniaxiale (J/m^3)
+    Ms = args.Ms        # Aimantation (A/m)
+    R = args.R          # Rayon extérieur en m
+
+    # --- Calcul des variables dépendantes ---
+    r0 = R * 1e-6                  # Rayon de cœur (singularité numérique évitée), très petit devant R 
+    kappa = (Ku * R**2) / (2 * A)  # grandeur adimensionnelle
+    epsilon = r0 / R               # parametre adimensionnel
+
+    # --- Affichage des arguments dans le terminal ---
+    print("\n" + "="*50)
+    print("PARAMÈTRES DE LA SIMULATION EN COURS :")
+    print(f" -> IMAGE_SIZE : {IMAGE_SIZE}")
+    print(f" -> PIXEL_SIZE : {PIXEL_SIZE:.2e} m")
+    print(f" -> A  : {A:.2e} J/m")
+    print(f" -> Ku : {Ku:.2e} J/m^3")
+    print(f" -> Ms : {Ms:.2e} A/m")
+    print(f" -> R  : {R:.2e} m")
+    print(f" -> kappa (calculé)   : {kappa:.4f}\n")
+    print("="*50 + "\n")
+
+    # --- Détermination dynamique du répertoire du script ---
+    # Cette variable pointe de manière absolue vers le dossier contenant ce fichier .py
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+    # 2. Lancement des calculs physiques
+    rho_grid, omega_bvp, y_vals, phase_vals, thick_vals = simuler_curling()
+
+    # 3. Tracés graphiques de contrôle
+    generer_graphiques(rho_grid, omega_bvp, y_vals, phase_vals)
+
+    # 4. Normalisation et exportation au format PNG 16-bits avec métadonnées
+    exporter_cartes_16bits(phase_vals, thick_vals)
