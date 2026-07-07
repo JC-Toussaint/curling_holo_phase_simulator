@@ -24,11 +24,6 @@ $$\kappa = \frac{K_u R^2}{2A}$$
 
 Le domaine spatial radial est discrétisé selon la variable adimensionnelle $\rho = r/R \in [\epsilon, 1]$, où $\epsilon = r_0/R$ introduit un rayon de cœur minimal pour éviter toute singularité numérique à l'origine.
 
-La suite logicielle intègre également les paramètres de la microscopie électronique à transmission (TEM) pour la propagation :
-* **$E_0$** : La tension d'accélération des électrons (en eV).
-* **$\Delta z$** (defocus) : La distance de défocalisation (en mètres).
-* **$C_s$** : La constante d'aberration sphérique de la lentille objectif (en mètres).
-
 ---
 
 ## 💻 Structure Algorithmique
