@@ -37,8 +37,7 @@ Le script de simulation est articulé autour de 5 étapes clés :
 1. **Résolution du Problème aux Limites (BVP) :** Détermination de l'angle d'aimantation $\omega(\rho)$ à l'aide de l'algorithme `scipy.integrate.solve_bvp`.
 2. **Projection Magnétique :** Calcul de l'intégrale de projection $I(y)$ le long de la ligne de visée du faisceau d'électrons ($z$). L'évaluation est vectorisée via `np.vectorize` et calculée par quadrature numérique (`scipy.integrate.quad`).
 3. **Intégration de la Phase :** Calcul de la phase cumulative $\Phi(y)$ par la méthode des trapèzes sur l'intervalle $[-2R, 2R]$. On utilise l'anti-symétrie de la phase, imposant $\Phi(0) = 0$ au centre.
-4. **Simulation de Fresnel 1D (Optimisée) :** Propagation de l'onde électronique via une transformée de Fourier rapide (FFT) appliquée en 1D sur le profil de phase. Cette étape intègre un **padding miroir horizontal** à gauche afin d'assurer la continuité $C^0$ aux bords.
-5. **Génération d'Images 2D & Métadonnées :** Duplication des profils 1D (phase et intensité de Fresnel) via `np.tile` pour générer des matrices 2D exploitant l'invariance stricte selon la direction perpendiculaire. Les deux cartes sont exportées au format PNG 16-bits (`uint16`) en y injectant les métadonnées physiques (`PngInfo`) nécessaires à leur décodage futur.
+5. **Génération d'Images 2D & Métadonnées :** Duplication des profils 1D (phase et épaisseur) via `np.tile` pour générer des matrices 2D exploitant l'invariance stricte selon la direction perpendiculaire. Les deux cartes sont exportées au format PNG 16-bits (`uint16`) en y injectant les métadonnées physiques (`PngInfo`) nécessaires à leur décodage futur.
 
 ---
 
@@ -56,21 +55,12 @@ Pour chaque abscisse $y \in [0, R]$, l'intégration le long de la ligne de visé
 $$I(y) = -\mu_0 M_s \int_{-z_{\text{max}}(y)}^{z_{\text{max}}(y)} \cos\big(\omega(\rho)\big) \, \mathrm{d}z$$
 où la position radiale locale est $\rho = \frac{\sqrt{y^2 + z^2}}{R}$.
 
-### 3. Calcul de la Phase Cumulative $\Phi(y)$
+### 3. Calcul de la Phase Holographique $\Phi(y)$
 En intégrant les constantes fondamentales issues de `scipy.constants` (charge élémentaire $e$ et constante de Planck réduite $\hbar$) et en imposant $\Phi(0) = 0$, la phase finale vaut :
 $$\Phi(y) = -\frac{e}{\hbar} \int_{0}^{y} I(u) \, \mathrm{d}u$$
 
-### 4. Propagation de Fresnel 1D
-L'invariance directionnelle selon l'axe vertical ($ky = 0$) réduit l'équation de propagation. La fonction d'onde initiale paddée en miroir horizontal est $\psi_0(x) = \exp\big(1j \cdot \Phi_{\text{pad}}(x)\big)$.
-
-La propagation dans l'espace des fréquences spatiales $k_x$ est régie par la fonction de transfert des aberrations $H(k_x)$ :
-$$H(k_x) = \exp\big(-1j \cdot \chi(k_x)\big)$$
-$$\chi(k_x) = \pi \lambda \Delta z k_x^2 + \frac{1}{2}\pi C_s \lambda^3 k_x^4$$
-où $\lambda$ est la longueur d'onde relativiste de l'électron calculée à partir de $E_0$. L'intensité finale du contraste de Fresnel 1D est obtenue par :
-$$I_{\text{Fresnel}}(x) = \left| \mathcal{TF}^{-1} \big( \mathcal{TF}(\psi_0) \cdot H \big) \right|^2$$
-
-### 5. Images Finales 2D
-Les images discrètes $M(j, i)$ de taille $N \times N$ (pour la phase et le contraste de Fresnel) subissent une normalisation linéaire stricte suivie d'une quantification sur 16 bits :
+### 4. Images Finales 2D
+Les images discrètes $M(j, i)$ de taille $N \times N$ (pour la phase et l'épaisseur) subissent une normalisation linéaire stricte suivie d'une quantification sur 16 bits :
 $$M(j, i) = \text{round}\left( 65535 \times \frac{V(i) - V_{\text{min}}}{V_{\text{max}} - V_{\text{min}}} \right)$$
 où $V$ représente le vecteur 1D étendu en 2D par invariance verticale via `np.tile`.
 
