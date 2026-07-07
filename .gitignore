@@ -13,6 +13,9 @@ install_manifest.txt
 /examples/**/*.png
 /examples/**/*.msh
 /examples/**/*.out
+/Tests/**/*.png
+/Tests/**/*.msh
+/Tests/**/*.out
 
 # Smoke test
 smoke-test.msh

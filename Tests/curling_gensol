@@ -1,0 +1,368 @@
+#!/usr/bin/env python3
+
+description = '''
+'''
+
+import socket 
+import os
+import sys
+import numpy as np
+import meshio
+from scipy.integrate import solve_bvp
+from scipy.constants import mu_0  # <--- Ajout pour pouvoir définir la valeur par défaut de Ms
+
+import matplotlib.pyplot as plt
+from datetime import datetime
+import warnings
+
+# ---------------------------------------------------------------
+# Parametres physiques (unites SI) - Déclarés par défaut
+# ---------------------------------------------------------------
+#A  = 1.3e-11      # constante d'echange (J/m)
+#Ku = -1e5         # constante d'anisotropie effective (J/m^3)
+#Ms = 1.00531 / mu_0 # Aimantation (A/m)
+
+# ---------------------------------------------------------------
+# Variables adimensionnelles et domaine d'integration
+# ---------------------------------------------------------------
+#epsilon = r0 / R  # Limite inferieure du domaine
+N = 600           # Nombre de points de discretisation
+
+warnings.simplefilter("always")
+warnings.formatwarning = lambda message, category, filename, lineno, line=None: f"{message}\n"
+
+DEBUG = False
+
+def define_region_functions(sol_sol):
+    """Define magnetization vector field for each region """
+    import numpy as np
+    # en nm
+    R_nm = R * 1e9 # Ajusté dynamiquement selon la valeur de R
+
+    def curling(x, y, z):
+        # 1. On calcule le rayon adimensionnel du point courant
+        rho_point = np.sqrt(x**2 + y**2) / R_nm
+
+        # 2. On interpole l'angle omega grâce à la fonction continue sol_sol
+        # sol_sol(rho_point)[0] donne la valeur de omega
+        omega = sol_sol(rho_point)[0]
+
+        # 3. On génère le vecteur [mx, my, mz] basé sur cet angle
+        mx = -np.sin(omega) * (y / np.sqrt(x**2 + y**2))
+        my = +np.sin(omega) * (x / np.sqrt(x**2 + y**2))
+        mz = +np.cos(omega)
+
+        return [mx, my, mz]
+
+    return {
+        'cyl_volume': lambda x, y, z: curling(x, y, z),
+    }
+
+# ---------------------------------------------------------------
+# Equation d'Euler-Lagrange adimensionnee
+# ---------------------------------------------------------------
+def ode(rho, y):
+    omega, domega_drho = y
+
+    # omega'' = -omega'/rho + [1/(2*rho^2) + (Ku*R^2)/(2*A)] * sin(2*omega)
+    d2omega_drho2 = -domega_drho / rho + (1.0 / (2 * rho**2) + kappa) * np.sin(2 * omega)
+
+    return np.vstack([domega_drho, d2omega_drho2])
+
+# Conditions aux limites : omega(epsilon) = 0 et omega'(1) = 0
+def bc(ya, yb):
+    return np.array([ya[0] - 0.0,      # omega(epsilon) = 0
+                     yb[1] - 0.0])     # omega_rho(1) = 0
+
+def get_region_elements(mesh):
+    """
+    Return a dictionary mapping region name -> list of element descriptions.
+    Only includes volume elements (tetrahedra).
+    """
+    if not hasattr(mesh, "cells"):
+        raise ValueError("mesh has no attribute 'cells'")
+
+    # 1) build mapping physical_id -> (region_name, dimension)
+    id_to_name = {}
+    for name, arr in mesh.field_data.items():
+        try:
+            arr_flat = np.asarray(arr).flatten()
+            phys_id = int(arr_flat[0])
+            dimension = int(arr_flat[1]) if len(arr_flat) > 1 else None
+            # Only keep 3D regions (volume)
+            if dimension == 3:
+                id_to_name[phys_id] = name
+                if DEBUG:
+                    print(f"  Volume region: {name} (ID={phys_id}, dim={dimension})")
+        except Exception:
+            continue
+    
+    if not id_to_name:
+        raise ValueError("No volume regions (dimension=3) found in mesh")
+    
+    if DEBUG:
+        print("Volume regions only:", id_to_name)
+    
+    # 2) find physical tags key
+    phys_key = None
+    if hasattr(mesh, "cell_data") and mesh.cell_data:
+        for k in mesh.cell_data.keys():
+            if k == "gmsh:physical":
+                phys_key = k
+                break
+        if phys_key is None:
+            for k in mesh.cell_data.keys():
+                if "physical" in k.lower():
+                    phys_key = k
+                    break
+
+    if phys_key is None:
+        raise ValueError("No physical tags found in mesh.cell_data.")
+
+    # 3) iterate cell blocks - only process volume elements
+    regions = {}
+    global_idx = 0
+    phys_tags_list = mesh.cell_data[phys_key]
+    
+    if len(phys_tags_list) != len(mesh.cells):
+        raise ValueError(f"Mismatch between cell blocks and cell_data for key '{phys_key}'")
+
+    for block_index, (cell_block, phys_tags) in enumerate(zip(mesh.cells, phys_tags_list)):
+        cell_type = cell_block.type
+        connectivity = np.asarray(cell_block.data, dtype=int)
+        phys_tags = np.asarray(phys_tags, dtype=int).flatten()
+
+        if connectivity.shape[0] != phys_tags.shape[0]:
+            raise ValueError(f"Element count mismatch in block {block_index}")
+
+        for local_idx in range(connectivity.shape[0]):
+            phys_id = int(phys_tags[local_idx])
+            # Only process if this physical ID is in our volume regions
+            if phys_id not in id_to_name:
+                continue
+                
+            region_name = id_to_name[phys_id]
+            elem = {
+                "cell_type": cell_type,
+                "block_index": block_index,
+                "local_element_index": local_idx,
+                "global_element_index": global_idx,
+                "nodes": connectivity[local_idx].tolist()
+            }
+            regions.setdefault(region_name, []).append(elem)
+            global_idx += 1
+
+    return regions
+
+
+def load_mesh(filename):
+    """Load mesh and return points, triangles, tetrahedrons, regions."""
+    if not os.path.isfile(filename):
+        raise FileNotFoundError(f"File '{filename}' does not exist.")
+
+    try:
+        mesh = meshio.read(filename)
+        if DEBUG:
+            print(mesh)
+        
+        # Display regions info
+        for cell_block, cell_data in zip(mesh.cells, mesh.cell_data["gmsh:physical"]):
+            cell_type = cell_block.type
+            if DEBUG:
+                print(f"\nCell type: {cell_type}")
+            for region_name, (region_id, dim) in mesh.field_data.items():
+                element_indices = np.where(cell_data == region_id)[0]
+                if DEBUG and len(element_indices) > 0:
+                    print(f"  Region '{region_name}' (ID={region_id}, dim={dim}): "
+                            + f"{len(element_indices)} elements")
+
+        regions = get_region_elements(mesh)
+        points = mesh.points[:, :3]
+        
+        if DEBUG: # assumption DEBUG set to 1
+        # Display all element node indices for each region
+            print('DEBUG')
+            for region_name, elems in regions.items():
+                print(f"\nRegion '{region_name}' — {len(elems)} elements:")
+                for elem in elems:
+                    print(f"  Element {elem['global_element_index']:4d} ({elem['cell_type']}): "
+                            + f"nodes {elem['nodes']}")
+            print('Number of nodes : ', len(points))
+
+        return points, regions
+
+    except Exception as e:
+        raise RuntimeError(f"Error loading mesh '{filename}': {e}")
+
+
+def apply_region_functions(points, regions, region_functions):
+    """Apply region defined functions."""
+    m = np.full((len(points), 3), np.nan, dtype=np.float64)
+    
+    for region_name, elems in regions.items():
+        if region_name not in region_functions:
+            warnings.warn(f"⚠️ No function defined for region '{region_name}'. Region ignored.")
+            continue
+
+        func = region_functions[region_name]
+        for elem in elems:
+            for node_id in elem['nodes']:
+                idx = node_id # Meshio uses zero-based indexing
+                xyz = points[idx, :]
+                m[idx] = np.array(func(*xyz))
+
+    norms = np.linalg.norm(m, axis=1)
+    nonzero = norms > 0   
+    m[nonzero] /= norms[nonzero][:, np.newaxis]
+    
+    if (np.linalg.norm(m, axis=1) == 0).any():
+         warnings.warn(f"⚠️  m contains zero-norm vectors")
+
+    if np.isnan(m).any():
+        warnings.warn("m contains non-initialized values")
+        sys.exit("❌ abort")
+
+    return m
+
+
+def write_solution_file(m, filename="curling_cfg.sol"):
+    """Write field m and metadata to curling_cfg file."""
+    now = datetime.now().isoformat()
+    hostname = socket.gethostname()
+    
+    header_lines = [
+        "## generator: curling_gensol",
+        f"## hostname: {hostname}",
+        f"## real-world time: {now}",
+        "## time: 0",
+        "## columns: idx\tmx\tmy\tmz\tphi"
+    ]
+
+    idx = np.arange(m.shape[0])[:, np.newaxis]
+    phi = np.zeros((m.shape[0], 1))
+    tab = np.hstack((idx, m, phi))
+
+    with open(filename, "w") as f:
+        for line in header_lines:
+            f.write(line + "\n")
+        np.savetxt(f, tab, fmt=["%d", "%+.7e", "%+.7e", "%+.7e", "%.7e"], delimiter="\t")
+
+    print(f"✅ File '{filename}' successfully written "
+          f"({len(header_lines)} header lines and {m.shape[0]} data lines).")
+
+def get_params():
+    import argparse
+    description = 'generate a magnetic configuration file'
+    epilogue = '''
+curling_gensol is an executable that generates initial magnetization configurations (`curling_cfg.sol` files) for
+feeLLGood simulations from mesh files.
+Input mesh file has to be readable by meshio python module.
+It automatically detects physical volume regions in the input mesh and allows to define custom
+vector fields for each region.
+'''
+
+    parser = argparse.ArgumentParser(description=description, epilog=epilogue,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('mshFileName',
+            help='a mesh file meshio module can open, for example a gmsh file')
+    
+    # Ajout des paramètres demandés
+    parser.add_argument('--A',  type=float, default = 1.3e-11, help="Constante d'échange (J/m)")
+    parser.add_argument('--Ku', type=float, default = -1e4, help="Constante d'anisotropie uniaxiale (J/m^3)")
+    parser.add_argument('--Ms', type=float, default = 1.00531 / mu_0, help="Aimantation (A/m)")
+
+    parser.add_argument('--version',action='version',version= __version__,
+            help='show the version number')
+    
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(0)
+   
+    return parser.parse_args()
+
+def main():
+    """Main routine."""
+    # Récupération de tous les arguments passés en ligne de commande
+    args = get_params()
+    mesh_file = args.mshFileName
+
+    # Déclaration des variables globales pour écraser les valeurs par défaut
+    global A, Ku, Ms, R, r0, kappa, epsilon
+    A = args.A
+    Ku = args.Ku
+    Ms = args.Ms
+
+    points, regions = load_mesh(mesh_file)
+    print('ASSUMPTION: coordinates in nanometers !')
+
+    # Recalcul des variables dépendantes suite aux arguments fournis
+    xmax = points[:, 0].max() 
+    xmin = points[:, 0].min()
+    R = 0.5*(xmax-xmin)*1e-9 # in m
+
+    print(f'Cylinder Radius : {R:.2e} m')
+    r0 = R * 1e-6
+    kappa = (Ku * R**2) / (2 * A)
+    epsilon = r0 / R
+
+    # ---------------------------------------------------------------
+    # Initialisation (Guess) et Resolution par solve_bvp
+    # ---------------------------------------------------------------
+    # Estimation initiale lineaire pour guider le solveur vers la solution non triviale
+    rho = np.linspace(epsilon, 1.0, N)
+    omega_guess = (np.pi / 2) * (rho - epsilon) / (1.0 - epsilon)
+    domega_guess = np.gradient(omega_guess, rho)
+    y_guess = np.vstack([omega_guess, domega_guess])
+
+    # Resolution
+    sol = solve_bvp(ode, bc, rho, y_guess, tol=1e-7, max_nodes=1000000)
+    print("[Euler-Lagrange / BVP] statut :", sol.message)
+
+    # Lorsque solve_bvp résout l'équation, il ne renvoie pas seulement une liste de points discrets.
+    # Il calcule en arrière-plan une spline (un polynôme par morceaux) qui relie continûment tous les points du maillage.
+    # Add current directory to Python path if necessary
+    current_dir = os.getcwd()
+    if current_dir not in sys.path:
+        sys.path.insert(0, current_dir)
+    
+    try:
+        region_functions = define_region_functions(sol.sol)
+        
+        if DEBUG:
+            print(f"DEBUG: Regions in mesh: {sorted(regions.keys())}")
+            print(f"DEBUG: Regions in init_cfg: {sorted(region_functions.keys())}")
+         
+        # Check that all regions have a function
+        missing_regions = set(regions.keys()) - set(region_functions.keys())
+        if missing_regions:
+            print(f"⚠️  Missing regions : {missing_regions}")
+            sys.exit(0)
+
+        # ---------------------------------------------------------------
+        # Trace de omega(rho)
+        # ---------------------------------------------------------------
+        omega_bvp = sol.sol(rho)[0]
+        plt.figure(figsize=(7, 5))
+        plt.plot(rho, omega_bvp, '-', lw=2.5, color='tab:orange', label="Equation d'Euler-Lagrange (BVP)")
+        plt.xlabel(r'$\rho = r/R$')
+        plt.ylabel(r'$\omega(\rho)$ [rad]')
+        plt.title("Profil adimensionne du mode curling dans un cylindre")
+        plt.legend()
+        plt.grid(alpha=0.3)
+        plt.tight_layout()
+        plt.savefig('curling_mode_adim.png', dpi=150)
+        plt.show()
+
+
+        print("✅ All regions are defined, generating curling_cfg.sol ...")
+        # If everything is OK, generate sol.in
+        m = apply_region_functions(points, regions, region_functions)
+        write_solution_file(m)
+        
+    except (AttributeError, Exception) as e:
+        print(f"⚠️  Error : {e}")
+        sys.exit(0)
+
+__version__ = '1.0.1'
+if __name__ == "__main__":
+    main()

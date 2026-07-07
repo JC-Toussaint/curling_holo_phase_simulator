@@ -1,0 +1,16 @@
+# Access to feeLLGood Python Modules
+export PYTHONPATH="/home/toussaij/Devel/FeeLLGood/python-modules:$PYTHONPATH"
+
+# Generating cylinder saved in cyl.msh file
+python3 cylinder.py
+
+# Generating curling configuration saved in curling_cfg.sol file
+./curling_gensol cyl.msh
+
+# Calculating Holographic Phase
+fmit-calculator settings.yml
+
+# Calculating Fresnel Image from Holographic Phase and Thickness maps
+fmit-fresnel sim_HOLO_PHASE.png sim_PATH_LENGTH.png
+
+
