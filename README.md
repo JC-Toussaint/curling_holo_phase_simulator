@@ -1,6 +1,6 @@
-# Curling Holo Fresnel Suite : Simulation Magnétique & Imagerie Électronique
+# Curling Holo Phase Simulator : Simulation de la Phase Holographique Electronique
 
-Ce projet implémente la simulation numérique de la distribution d'aimantation dans un cylindre ferromagnétique (mode curling). À partir de cette configuration micromagnétique, la suite logicielle calcule l'impact du champ magnétique sur la phase d'un faisceau d'électrons par **holographie électronique**, puis simule la propagation en espace libre pour générer le **contraste de Fresnel** (imagerie par défocalisation). 
+Ce projet implémente la simulation numérique de la distribution d'aimantation dans un cylindre ferromagnétique (mode curling). À partir de cette configuration micromagnétique, la suite logicielle calcule l'impact du champ magnétique sur la phase d'un faisceau d'électrons par **holographie électronique**. 
 
 L'ensemble des résultats est exporté sous forme d'images 2D au format PNG 16-bits incluant des métadonnées physiques détaillées.
 
