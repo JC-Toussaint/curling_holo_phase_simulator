@@ -8,6 +8,7 @@ from PIL.PngImagePlugin import PngInfo  # <--- Ajout pour gérer les métadonné
 
 from scipy.constants import elementary_charge, hbar, mu_0, electron_mass, c
 e_c = elementary_charge
+from datetime import datetime
 
 import sys
 import os
@@ -230,6 +231,11 @@ def exporter_cartes_16bits(phase_vals, thick_vals):
     Génère, normalise et exporte les images 2D en niveaux de gris 16-bits
     (Carte de phase et Carte d'épaisseur) avec leurs métadonnées respectives.
     """
+    # --- Récupération de la date et de l'heure actuelles ---
+    maintenant = datetime.now()
+    date_creation = maintenant.strftime("%Y-%m-%d")
+    heure_creation = maintenant.strftime("%H:%M:%S")
+
     # -------------------------------------------------------------------------
     # EXPORT CARTE DE PHASE HOLOGRAPHIQUE (PNG 16-BITS) + MÉTADONNÉES
     # -------------------------------------------------------------------------
@@ -254,6 +260,10 @@ def exporter_cartes_16bits(phase_vals, thick_vals):
     # --- Création de l'objet Métadonnées ---
     metadata_phase = PngInfo()
     metadata_phase.add_text("Simulation_Type", "Curling Holo Phase Simulator - Phase Map")
+    # Ajout de la date et de l'heure
+    metadata_phase.add_text("Creation_Date", date_creation)
+    metadata_phase.add_text("Creation_Time", heure_creation)
+
     metadata_phase.add_text("Param_A", str(A))
     metadata_phase.add_text("Param_Ku", str(Ku))
     metadata_phase.add_text("Param_Ms", str(Ms))
@@ -307,7 +317,11 @@ def exporter_cartes_16bits(phase_vals, thick_vals):
 
     # --- Création de l'objet Métadonnées ---
     metadata_thick = PngInfo()
-    metadata_thick.add_text("Simulation_Type", "Curling Holo Phase Simulator - Thick Map")
+    metadata_thick.add_text("Simulation_Type", "Curling Holo Phase Simulator - Thickness Map")
+    # Ajout de la date et de l'heure
+    metadata_phase.add_text("Creation_Date", date_creation)
+    metadata_phase.add_text("Creation_Time", heure_creation)
+
     metadata_thick.add_text("Param_A", str(A))
     metadata_thick.add_text("Param_Ku", str(Ku))
     metadata_thick.add_text("Param_Ms", str(Ms))
