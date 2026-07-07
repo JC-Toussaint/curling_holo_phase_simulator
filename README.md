@@ -59,6 +59,16 @@ Les images discrètes $M(j, i)$ de taille $N \times N$ (pour la phase et l'épai
 $$M(j, i) = \text{round}\left( 65535 \times \frac{V(i) - V_{\text{min}}}{V_{\text{max}} - V_{\text{min}}} \right)$$
 où $V$ représente le vecteur 1D étendu en 2D par invariance verticale via `np.tile`.
 
+## 🚀 Usage
+
+Le script s'exécute en ligne de commande. Il prend deux arguments positionnels obligatoires (taille de l'image et taille du pixel) ainsi que des options pour configurer la physique du cylindre.
+
+### Exemple de base
+Pour générer les cartes de phase et d'épaisseur d'un cylindre de rayon $R = 100\text{ nm}$ avec une anisotropie négative ($K_u = -10^5\text{ J/m}^3$), sur une image de $1000 \times 1000\text{ px}$ (résolution de $1\text{ nm/px}$), exécutez :
+
+```bash
+./curling_holo_simulator 1000 1e-9 --R 100e-9 --Ku=-1e5
+```
 ---
 
 ## 🛠️ Dépendances
