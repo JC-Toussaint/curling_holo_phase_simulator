@@ -14,6 +14,9 @@ import sys
 import os
 import argparse
 
+class CustomHelpFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
+    pass
+
 # Discretization for solve_bvp
 N_BVP = 600       # Number of discretization points for the Euler-Lagrange equation
 
@@ -82,11 +85,18 @@ def configurer_arguments():
          %(prog)s 1000 2e-10 --A 1.5e-11 --Ku=-2e4 --R 100e-9
     """
 
+    #parser = argparse.ArgumentParser(
+    #    description=description_text,
+    #    epilog=exemples,
+    #    formatter_class=argparse.RawDescriptionHelpFormatter,
+    #    prefix_chars='-+'  # Better handling of plus and minus signs
+    #)
+
     parser = argparse.ArgumentParser(
         description=description_text,
         epilog=exemples,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        prefix_chars='-+'  # Better handling of plus and minus signs
+        formatter_class=CustomHelpFormatter,
+        prefix_chars='-+' # Better handling of plus and minus signs
     )
 
     # Required positional arguments

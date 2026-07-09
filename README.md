@@ -1,80 +1,80 @@
-# Curling Holo Phase Simulator : Simulation de la Phase Holographique Electronique
+# Curling Holo Phase Simulator: Electron Holographic Phase Simulation
 
-Ce projet implémente la simulation numérique de la distribution d'aimantation dans un cylindre ferromagnétique (mode curling). À partir de cette configuration micromagnétique, la suite logicielle calcule l'impact du champ magnétique sur la phase d'un faisceau d'électrons par **holographie électronique**. 
+This project implements the numerical simulation of the magnetization distribution in a ferromagnetic cylinder (curling mode). Starting from this micromagnetic configuration, the software suite computes the impact of the magnetic field on the phase of an electron beam via **electron holography**.
 
-L'ensemble des résultats est exporté sous forme d'images 2D au format PNG 16-bits incluant des métadonnées physiques détaillées.
+All results are exported as 2D images in 16-bit PNG format, including detailed physical metadata.
 
-## 📋 Table des Matières
-- [Physique et Paramètres](#-physique-et-paramètres)
-- [Structure Algorithmique](#-structure-algorithmique)
-- [Modélisation Mathématique](#-modélisation-mathématique)
-- [Dépendances](#-dépendances)
+## 📋 Table of Contents
+- [Physics and Parameters](#-physics-and-parameters)
+- [Algorithmic Structure](#-algorithmic-structure)
+- [Mathematical Modeling](#-mathematical-modeling)
+- [Dependencies](#-dependencies)
 
 ---
 
-## 🔬 Physique et Paramètres
+## 🔬 Physics and Parameters
 
-Le système modélise un cylindre ferromagnétique de rayon $R$. La configuration dépend de trois constantes physiques majeures :
-* **$A$** : La constante d'échange.
-* **$K_u$** : La constante d'anisotropie uniaxiale positive ou négative.
-* **$M_s$** : L'aimantation à saturation.
+The system models a ferromagnetic cylinder of radius $R$. The configuration depends on three major physical constants:
+* **$A$**: The exchange constant.
+* **$K_u$**: The uniaxial anisotropy constant, positive or negative.
+* **$M_s$**: The saturation magnetization.
 
-Un paramètre d'anisotropie adimensionnel $\kappa$ est défini par :
+A dimensionless anisotropy parameter $\kappa$ is defined by:
 $$\kappa = \frac{K_u R^2}{2A}$$
 
-Le domaine spatial radial est discrétisé selon la variable adimensionnelle $\rho = r/R \in [\epsilon, 1]$, où $\epsilon = r_0/R$ introduit un rayon de cœur minimal pour éviter toute singularité numérique à l'origine.
+The radial spatial domain is discretized using the dimensionless variable $\rho = r/R \in [\epsilon, 1]$, where $\epsilon = r_0/R$ introduces a minimal core radius to avoid any numerical singularity at the origin.
 
 ---
 
-## 💻 Structure Algorithmique
+## 💻 Algorithmic Structure
 
-Le script de simulation est articulé autour de 5 étapes clés :
-1. **Résolution du Problème aux Limites (BVP) :** Détermination de l'angle d'aimantation $\omega(\rho)$ à l'aide de l'algorithme `scipy.integrate.solve_bvp`.
-2. **Projection Magnétique :** Calcul de l'intégrale de projection $I(y)$ le long de la ligne de visée du faisceau d'électrons ($z$). L'évaluation est vectorisée via `np.vectorize` et calculée par quadrature numérique (`scipy.integrate.quad`).
-3. **Intégration de la Phase :** Calcul de la phase cumulative $\Phi(y)$ par la méthode des trapèzes sur l'intervalle $[-2R, 2R]$. On utilise l'anti-symétrie de la phase, imposant $\Phi(0) = 0$ au centre.
-5. **Génération d'Images 2D & Métadonnées :** Duplication des profils 1D (phase et épaisseur) via `np.tile` pour générer des matrices 2D exploitant l'invariance stricte selon la direction perpendiculaire. Les deux cartes sont exportées au format PNG 16-bits (`uint16`) en y injectant les métadonnées physiques (`PngInfo`) nécessaires à leur décodage futur.
+The simulation script is organized around 5 key steps:
+1. **Solving the Boundary Value Problem (BVP):** Determining the magnetization angle $\omega(\rho)$ using the `scipy.integrate.solve_bvp` algorithm.
+2. **Magnetic Projection:** Computing the projection integral $I(y)$ along the electron beam's line of sight ($z$). The evaluation is vectorized via `np.vectorize` and computed by numerical quadrature (`scipy.integrate.quad`).
+3. **Phase Integration:** Computing the cumulative phase $\Phi(y)$ using the trapezoidal method over the interval $[-2R, 2R]$. The anti-symmetry of the phase is used, enforcing $\Phi(0) = 0$ at the center.
+5. **2D Image Generation & Metadata:** Duplicating the 1D profiles (phase and thickness) via `np.tile` to generate 2D matrices exploiting strict invariance along the perpendicular direction. Both maps are exported in 16-bit PNG format (`uint16`), embedding the physical metadata (`PngInfo`) needed for their future decoding.
 
 ---
 
-## 📐 Modélisation Mathématique
+## 📐 Mathematical Modeling
 
-### 1. Équation d'Euler-Lagrange
-La configuration micromagnétique est régie par l'équation différentielle du second ordre suivante :
+### 1. Euler-Lagrange Equation
+The micromagnetic configuration is governed by the following second-order differential equation:
 $$\omega''(\rho) = -\frac{\omega'(\rho)}{\rho} + \left( \frac{1}{2\rho^2} + \kappa \right) \sin\big(2\omega(\rho)\big)$$
 
-Soumise aux conditions aux limites :
-$$\omega(\epsilon) = 0 \quad \text{et} \quad \omega'(1) = 0$$
+Subject to the boundary conditions:
+$$\omega(\epsilon) = 0 \quad \text{and} \quad \omega'(1) = 0$$
 
-### 2. Intégrale de Projection $I(y)$
-Pour chaque abscisse $y \in [0, R]$, l'intégration le long de la ligne de visée géométrique $z_{\text{max}}(y) = \sqrt{R^2 - y^2}$ donne :
+### 2. Projection Integral $I(y)$
+For each abscissa $y \in [0, R]$, integrating along the geometric line of sight $z_{\text{max}}(y) = \sqrt{R^2 - y^2}$ gives:
 $$I(y) = -\mu_0 M_s \int_{-z_{\text{max}}(y)}^{z_{\text{max}}(y)} \cos\big(\omega(\rho)\big) \, \mathrm{d}z$$
-où la position radiale locale est $\rho = \frac{\sqrt{y^2 + z^2}}{R}$.
+where the local radial position is $\rho = \frac{\sqrt{y^2 + z^2}}{R}$.
 
-### 3. Calcul de la Phase Holographique $\Phi(y)$
-En intégrant les constantes fondamentales issues de `scipy.constants` (charge élémentaire $e$ et constante de Planck réduite $\hbar$) et en imposant $\Phi(0) = 0$, la phase finale vaut :
+### 3. Computing the Holographic Phase $\Phi(y)$
+By incorporating the fundamental constants from `scipy.constants` (elementary charge $e$ and reduced Planck constant $\hbar$) and enforcing $\Phi(0) = 0$, the final phase is:
 $$\Phi(y) = -\frac{e}{\hbar} \int_{0}^{y} I(u) \, \mathrm{d}u$$
 
-### 4. Images Finales 2D
-Les images discrètes $M(j, i)$ de taille $N \times N$ (pour la phase et l'épaisseur) subissent une normalisation linéaire stricte suivie d'une quantification sur 16 bits :
+### 4. Final 2D Images
+The discrete images $M(j, i)$ of size $N \times N$ (for the phase and the thickness) undergo strict linear normalization followed by 16-bit quantization:
 $$M(j, i) = \text{round}\left( 65535 \times \frac{V(i) - V_{\text{min}}}{V_{\text{max}} - V_{\text{min}}} \right)$$
-où $V$ représente le vecteur 1D étendu en 2D par invariance verticale via `np.tile`.
+where $V$ represents the 1D vector extended to 2D by vertical invariance via `np.tile`.
 
 ## 🚀 Usage
 
-Le script s'exécute en ligne de commande. Il prend deux arguments positionnels obligatoires (taille de l'image et taille du pixel) ainsi que des options pour configurer la physique du cylindre.
+The script runs from the command line. It takes two required positional arguments (image size and pixel size) as well as options to configure the physics of the cylinder.
 
-### Exemple de base
-Pour générer les cartes de phase et d'épaisseur d'un cylindre de rayon $R = 100\text{ nm}$ avec une anisotropie négative ($K_u = -10^5\text{ J/m}^3$), sur une image de $1000 \times 1000\text{ px}$ (résolution de $1\text{ nm/px}$), exécutez :
+### Basic example
+To generate the phase and thickness maps of a cylinder with radius $R = 100\text{ nm}$ and negative anisotropy ($K_u = -10^5\text{ J/m}^3$), on a $1000 \times 1000\text{ px}$ image (resolution of $1\text{ nm/px}$), run:
 
 ```bash
 ./curling_holo_simulator 1000 1e-9 --R 100e-9 --Ku=-1e5
 ```
 ---
 
-## 🛠️ Dépendances
+## 🛠️ Dependencies
 
-Le projet nécessite l'environnement Python standard pour le calcul scientifique :
-* **NumPy** (gestion des tableaux, FFT 1D et duplication matricielle)
-* **SciPy** (constantes physiques fondamentales, modules `integrate.solve_bvp` et `integrate.quad`)
-* **Pillow (PIL)** (génération des fichiers PNG 16-bits et gestion des métadonnées structurelles `PngInfo`)
-* **Matplotlib** (génération des graphiques de contrôle et affichage des résultats)
+The project requires the standard Python environment for scientific computing:
+* **NumPy** (array handling, 1D FFT, and matrix duplication)
+* **SciPy** (fundamental physical constants, `integrate.solve_bvp` and `integrate.quad` modules)
+* **Pillow (PIL)** (generation of 16-bit PNG files and management of structural metadata `PngInfo`)
+* **Matplotlib** (generation of control plots and display of results)
