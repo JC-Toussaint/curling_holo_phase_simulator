@@ -1,0 +1,592 @@
+#!/usr/bin/env python3
+"""
+charge un PNG 16-bit contenant une phase,
+extrait uniquement les métadonnées utiles, simule Fresnel,
+et sauvegarde l'image de sortie dans fresnel.png.
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
+import argparse
+import re
+import math
+from scipy.signal import fftconvolve
+from datetime import datetime  # <--- Conserve l'importation pour la date et l'heure
+
+# Constants in SI units
+from scipy.constants import h # Planck constant
+from scipy.constants import e # elementary charge
+from scipy.constants import m_e # electron mass
+from scipy.constants import c #speed of light in vacuum
+
+def relativistic_wavelength(eV):
+    E = eV * e
+    p = np.sqrt(E**2 + 2*E*m_e*c**2) / c
+    return h / p
+
+def electrical_constant(eV):
+    lam=relativistic_wavelength(eV)
+    E_0=m_e*c**2
+    E = eV * e #microscope acceleration, in eV
+    gamma= 1+ E/E_0 #relativistic Lorentz factor
+    U_s=eV*(1+gamma)/2 #relativistic corrected potential
+    return (np.pi*gamma)/(lam*U_s)
+    #return (2*np.pi*e/(lam*eV))*(eV+E_0)/(eV+2*E_0)
+
+def find_meta_value(meta, patterns):
+    """Cherche une clé correspondant à une regex dans meta."""
+    for key in meta:
+        key_norm = key.lower().strip()
+        for pat in patterns:
+            if re.search(pat, key_norm):
+                 return key, meta[key]
+    return None, None
+
+def safe_float(x):
+    ''' return a float '''
+    try:
+        if isinstance(x, bytes):
+            x = x.decode('utf-8', errors='ignore')
+        return float(str(x).strip())
+    except Exception:
+        return None
+
+def load_png(path_png,isAngle):
+    ''' load data from a png container and its metadata, if isAngle is True datas are mapped 
+    to [-π, π] '''
+    im = Image.open(path_png)
+    meta = dict(im.info)  # PNG metadatas
+
+    # Metadata parsing
+    _, pxw_val = find_meta_value(meta, [r'pixel *width', r'pixel.*x', r'physical.*pixel.*width'])
+    _, pxh_val = find_meta_value(meta, [r'pixel *height', r'pixel.*y', r'physical.*pixel.*height'])
+    _, pxunit_val = find_meta_value(meta, [r'pixel *unit', r'pixel.*unit', r'unit *pixel'])
+
+    _, vmin_val = find_meta_value(meta, [r'value *min', r'min *value', r'phase *min'])
+    _, vmax_val = find_meta_value(meta, [r'value *max', r'max *value', r'phase *max'])
+    _, vunit_val = find_meta_value(meta, [r'value *unit', r'unit *value', r'phase *unit'])
+
+    dx = safe_float(pxw_val)
+    dy = safe_float(pxh_val)
+    px_unit = str(pxunit_val).strip() if pxunit_val else None
+
+    val_min = safe_float(vmin_val)
+    val_max = safe_float(vmax_val)
+    value_unit = str(vunit_val).strip() if vunit_val else None
+
+    # image array converted tu unsigned 16 bit integer
+    arr = np.array(im)
+    if arr.dtype != np.uint16:
+        arr = arr.astype(np.uint16)
+        print("conversion to 16-bit done on image array")
+    arr = arr.astype(np.float64)
+
+    # Mapping
+    if (val_min is not None) and (val_max is not None):
+        val = val_min + (arr / 65535.0) * (val_max - val_min)
+        note = f"Linear mapping 0..65535 -> [{val_min}, {val_max}] {value_unit or ''}"
+    elif isAngle:
+        val = (arr / 65535.0) * (2*np.pi) - np.pi
+        note = "No Value Min/Max : mapping 0..65535 -> [-π, π]"
+
+    print("→ Metadata:")
+    if dx is not None and dy is not None:
+        print(f"   Pixel Width  (dx) = {dx} {px_unit or ''}")
+        print(f"   Pixel Height (dy) = {dy} {px_unit or ''}")
+    else:
+        print("   Pixel Width/Height not found")
+
+    if val_min is not None and val_max is not None:
+        print(f"   Value Min = {val_min} {value_unit or ''}")
+        print(f"   Value Max = {val_max} {value_unit or ''}")
+    else:
+        print("   Value Min/Max not found")
+    print(f"   Note : {note}\n")
+
+    return val, dx, dy
+
+def apply_window(phase, window_type='hann', width_fraction=0.1):
+    """Applique une fenêtre sur les bords de l'image
+    work in progress: to check
+    """
+    Ny, Nx = phase.shape
+    
+    # Largeur de la zone de transition
+    wx = int(Nx * width_fraction)
+    wy = int(Ny * width_fraction)
+    
+    # Création des fenêtres 1D
+    win_x = np.ones(Nx)
+    win_y = np.ones(Ny)
+    
+    if window_type == 'hann':
+        win_x[:wx] = np.sin(np.linspace(0, np.pi/2, wx))**2
+        win_x[-wx:] = np.sin(np.linspace(np.pi/2, 0, wx))**2
+        win_y[:wy] = np.sin(np.linspace(0, np.pi/2, wy))**2
+        win_y[-wy:] = np.sin(np.linspace(np.pi/2, 0, wy))**2
+    
+    # Fenêtre 2D
+    window = np.outer(win_y, win_x)
+    
+    return phase * window
+
+def simulate_fresnel_padded(phase, dx, dy, E0_eV=200e3, defocus=2e-6, Cs=1.2e-3, pad_factor=2):
+    ''' compute a simulation of a fresnel contrast using padding
+    it might be interesting to increase the number of zeros
+    work in progress: is zero-padding efficient ?
+    '''
+    Ny, Nx = phase.shape
+    lam = relativistic_wavelength(E0_eV)
+    
+    # Dimensions avec padding
+    Ny_pad = Ny * pad_factor
+    Nx_pad = Nx * pad_factor
+    
+    # Créer psi0 avec padding
+    psi0 = np.exp(1j * phase)
+    psi0_padded = np.zeros((Ny_pad, Nx_pad), dtype=complex)
+    
+    # Centrer l'image originale
+    y_start = (Ny_pad - Ny) // 2
+    x_start = (Nx_pad - Nx) // 2
+    psi0_padded[y_start:y_start+Ny, x_start:x_start+Nx] = psi0
+    
+    # FFT sur le tableau paddé
+    kx = np.fft.fftfreq(Nx_pad, d=dx)
+    ky = np.fft.fftfreq(Ny_pad, d=dy)
+    KX, KY = np.meshgrid(kx, ky)
+    k2 = KX**2 + KY**2
+    
+    chi = np.pi*lam*defocus*k2 + 0.5*np.pi*Cs*(lam**3)*(k2**2)
+    H = np.exp(-1j * chi)
+    
+    Psi0 = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(psi0_padded)))
+    Psi_def = Psi0 * H
+    psi_def = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(Psi_def)))
+    
+    # Extraire la région centrale
+    psi_def_crop = psi_def[y_start:y_start+Ny, x_start:x_start+Nx]
+    
+    return np.abs(psi_def_crop)**2
+
+def detrend_phase(phase):
+    """substract a baseline with a slope from phase
+    """
+    # not yet used anywhere
+    Ny, Nx = phase.shape
+    y, x = np.mgrid[0:Ny, 0:Nx]
+    
+    # Ajustement d'un plan
+    A = np.c_[x.ravel(), y.ravel(), np.ones(Nx*Ny)]
+    coef, _, _, _ = np.linalg.lstsq(A, phase.ravel(), rcond=None)
+    
+    plane = coef[0]*x + coef[1]*y + coef[2]
+    return phase - plane
+
+def simulate_fresnel_improved(phase, dx, dy, E0_eV=200e3, defocus=2e-6, Cs=1.2e-3, 
+                              use_window=True, pad_factor=1.5):
+    ''' combination of windowing and padding 
+    work in progress: check and test
+    '''
+    Ny, Nx = phase.shape
+    lam = relativistic_wavelength(E0_eV)
+    
+    # 1. Fenêtrage optionnel
+    if use_window:
+        phase_proc = apply_window(phase, width_fraction=0.05)
+    else:
+        phase_proc = phase
+    
+    psi0 = np.exp(1j * phase_proc)
+    
+    # 2. Zero-padding
+    Ny_pad = int(Ny * pad_factor)
+    Nx_pad = int(Nx * pad_factor)
+    psi0_padded = np.zeros((Ny_pad, Nx_pad), dtype=complex)
+    
+    y_start = (Ny_pad - Ny) // 2
+    x_start = (Nx_pad - Nx) // 2
+    psi0_padded[y_start:y_start+Ny, x_start:x_start+Nx] = psi0
+    
+    # 3. FFT et propagation
+    kx = np.fft.fftfreq(Nx_pad, d=dx)
+    ky = np.fft.fftfreq(Ny_pad, d=dy)
+    KX, KY = np.meshgrid(kx, ky)
+    k2 = KX**2 + KY**2
+    
+    chi = np.pi*lam*defocus*k2 + 0.5*np.pi*Cs*(lam**3)*(k2**2)
+    H = np.exp(-1j * chi)
+    
+    Psi0 = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(psi0_padded)))
+    Psi_def = Psi0 * H
+    psi_def = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(Psi_def)))
+    
+    # 4. Extraction de la région d'intérêt
+    psi_def_crop = psi_def[y_start:y_start+Ny, x_start:x_start+Nx]
+    
+    return np.abs(psi_def_crop)**2
+
+def simulate_fresnel_enveloppe(phase, dx, dy, E0_eV=200e3, defocus=2e-6, Cs=1.2e-3, convergence=0):
+    ''' convolution of an envelope and exp(j * chi) '''
+    Ny, Nx = phase.shape
+    lam = relativistic_wavelength(E0_eV)
+    
+    psi0 = np.exp(1j * phase)
+    kx = np.fft.fftshift(np.fft.fftfreq(Nx, d=dx))
+    ky = np.fft.fftshift(np.fft.fftfreq(Ny, d=dy))
+    KX, KY = np.meshgrid(kx, ky)
+    k2 = KX**2 + KY**2
+    envelope = np.exp(-(np.pi*convergence*defocus)**2 / np.log(2) * k2) #alpha=convergence
+    
+    chi = np.pi*lam*defocus*k2 + 0.5*np.pi*Cs*(lam**3)*(k2**2)
+    H = np.exp(1j * chi) * envelope
+
+    Psi0 = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(psi0)))
+    Psi_def = Psi0 * H
+    psi_def = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(Psi_def)))
+
+    return np.abs(psi_def)**2
+
+def make_periodic(phase):
+    """Force la phase à être périodique en soustrayant une surface bilinéaire"""
+    Ny, Nx = phase.shape
+    
+    # Valeurs moyennes sur chaque bord
+    top = np.mean(phase[0, :])
+    bottom = np.mean(phase[-1, :])
+    left = np.mean(phase[:, 0])
+    right = np.mean(phase[:, -1])
+    
+    # Créer une grille de correction
+    y, x = np.mgrid[0:Ny, 0:Nx]
+    
+    # Interpolation bilinéaire des bords
+    correction = (top * (Ny-1-y) + bottom * y) / (Ny-1)
+    correction += (left * (Nx-1-x) + right * x) / (Nx-1)
+    correction -= (top + bottom + left + right) / 4  # normalisation
+    
+    return phase - correction
+
+def cosine_edge_apodization(phase, edge_width=0.15):
+    """Applique une apodisation cosinus uniquement sur les bords"""
+    Ny, Nx = phase.shape
+    
+    # Largeur de transition en pixels
+    wx = int(Nx * edge_width)
+    wy = int(Ny * edge_width)
+    
+    # Fonction de transition cosinus
+    def cosine_window(n, w):
+        win = np.ones(n)
+        if w > 0:
+            # Bord gauche/haut
+            win[:w] = 0.5 * (1 - np.cos(np.pi * np.arange(w) / w))
+            # Bord droit/bas
+            win[-w:] = 0.5 * (1 - np.cos(np.pi * np.arange(w-1, -1, -1) / w))
+        return win
+    
+    win_x = cosine_window(Nx, wx)
+    win_y = cosine_window(Ny, wy)
+    window = np.outer(win_y, win_x)
+    
+    # Ramener progressivement vers la moyenne sur les bords
+    phase_mean = np.mean(phase)
+    return phase_mean + (phase - phase_mean) * window
+
+def simulate_fresnel_mirrored(phase, dx, dy, crop, E0_eV=200e3, defocus=2e-6, Cs=1.2e-3):
+    ''' compute fresnel contrast with mirror padding
+    Mirror padding 2×2 — boundary conditions C⁰ on the image edges
+    [ flip_xy | flip_y ]
+    [ flip_x  |  φ     ]
+    optionaly cropp boolean might be turned True to center-crop by 2 the image
+    '''
+    Ny, Nx = phase.shape
+    lam = relativistic_wavelength(E0_eV)
+    top_left  = np.flipud(np.fliplr(phase))   # flip horizontal + vertical
+    top_right = np.flipud(phase)              # flip vertical seulement
+    bot_left  = np.fliplr(phase)              # flip horizontal seulement
+    bot_right = phase                         # image originale
+    
+    phase_pad = np.block([
+        [top_left,  top_right],
+        [bot_left,  bot_right]
+    ])
+    # Taille résultante : (2*Ny, 2*Nx)
+    Ny_pad, Nx_pad = phase_pad.shape
+    psi0 = np.exp(1j * phase_pad)
+    
+    # Grille de fréquences spatiales
+    kx = np.fft.fftshift(np.fft.fftfreq(Nx_pad, d=dx)) #corrected
+    ky = np.fft.fftshift(np.fft.fftfreq(Ny_pad, d=dy))
+    KX, KY = np.meshgrid(kx, ky)
+    k2 = KX**2 + KY**2
+    
+    # Fonction d'aberration : défocus + aberration sphérique
+    chi = np.pi * lam * defocus * k2 + 0.5 * np.pi * Cs * (lam**3) * (k2**2)
+    H = np.exp(1j * chi) #transfer function - renommer vers T ?
+    # Propagation dans l'espace de Fourier
+    Psi0    = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(psi0)))
+    Psi_def = Psi0 * H
+    psi_def = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(Psi_def)))
+    
+    # Extraire le quadrant original (bot_right → [Ny:2Ny, Nx:2Nx])
+    psi_def_crop = psi_def[Ny:2*Ny, Nx:2*Nx]
+
+    if crop==True: #possible de faire a part une fonction avec def d'un dictionnaire
+        y1 = Ny + math.ceil(Ny/4)
+        y2 = 2*Ny - math.ceil(Ny/4)
+        x1 = Nx + math.ceil(Nx/4)
+        x2 = 2*Nx - math.ceil(Nx/4)
+        psi_def_crop = psi_def[y1:y2, x1:x2]
+    return np.abs(psi_def_crop)**2 
+
+def remove_edge_discontinuity(phase):
+    """Retire les discontinuités de bord par résolution de Poisson
+    To check (is it finished?)
+    """
+    from scipy.ndimage import laplace
+    from scipy.sparse import diags, csr_matrix
+    from scipy.sparse.linalg import spsolve
+    
+    Ny, Nx = phase.shape
+    
+    # Calculer le Laplacien de la phase
+    lap = laplace(phase)
+    
+    # Résoudre l'équation de Poisson avec conditions aux limites périodiques
+    # Pour simplification, on utilise une approximation
+    phase_corrected = np.copy(phase)
+    
+    # Alternative simple : soustraire un plan qui minimise les sauts aux bords
+    edges = np.concatenate([
+        phase[0, :],   # haut
+        phase[-1, :],  # bas
+        phase[:, 0],   # gauche
+        phase[:, -1]   # droite
+    ])
+    edge_mean = np.mean(edges)
+    
+    phase_corrected -= edge_mean
+    
+    return phase_corrected
+
+def simulate_fresnel_robust(phase, dx, dy, E0_eV=200e3, defocus=2e-6, Cs=1.2e-3):
+    """Version robuste avec gestion des discontinuités de bord + padding par symétrie miroir"""
+    Ny, Nx = phase.shape
+    lam = relativistic_wavelength(E0_eV)
+    
+    # Étape 1 : Forcer la périodicité
+    phase_periodic = make_periodic(phase)
+    
+    # Étape 2 : Apodisation douce des bords restants
+    phase_apo = cosine_edge_apodization(phase_periodic, edge_width=0.1)
+    
+    # Étape 3 : Padding par symétrie miroir pour assurer la continuité
+    # Haut-bas
+    phase_pad = np.vstack([
+        np.flipud(phase_apo),
+        phase_apo,
+        np.flipud(phase_apo)
+    ])
+    
+    # Gauche-droite
+    phase_pad = np.hstack([
+        np.fliplr(phase_pad),
+        phase_pad,
+        np.fliplr(phase_pad)
+    ])
+    
+    # Étape 4 : Créer psi0 sur l'image étendue
+    Ny_pad, Nx_pad = phase_pad.shape
+    psi0 = np.exp(1j * phase_pad)
+    
+    # Étape 5 : Propagation de Fresnel
+    kx = np.fft.fftfreq(Nx_pad, d=dx)
+    ky = np.fft.fftfreq(Ny_pad, d=dy)
+    KX, KY = np.meshgrid(kx, ky)
+    k2 = KX**2 + KY**2
+    
+    chi = np.pi*lam*defocus*k2 + 0.5*np.pi*Cs*(lam**3)*(k2**2)
+    H = np.exp(-1j * chi)
+    
+    Psi0 = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(psi0)))
+    Psi_def = Psi0 * H
+    psi_def = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(Psi_def)))
+    
+    # Étape 6 : Extraire la région centrale originale
+    psi_def_crop = psi_def[Ny:2*Ny, Nx:2*Nx]
+    
+    return np.abs(psi_def_crop)**2
+
+def profile_fresnel(I, dx, dy, color='blue', label="profile", name_fig="fresnel_profile.png"):
+    ''' plot a cross section (y=0) of the Fresnel contrast image and save '''
+    Ny, Nx = I.shape
+    print("Nx=", Nx, "Ny=", Ny, "dx(nm)=", int(dx*1e9))
+    y0=Ny//2
+    profile = I[y0, :]
+    # X axis 
+    #x = np.arange(-int(Nx//2), int(Nx//2), int(dx*1e9))
+    x = (np.arange(Nx) - (Nx - 1) / 2) * int(dx*1e9)
+    plt.figure()
+    plt.plot(x, profile, label=label, color=color)
+    #added x and y limits to profile to match cropped region in Intensity image
+    plt.ylim(-0.1, 4)
+    #plt.xlim(-200, 200) #pas necessaire ?
+    plt.xlabel("x (nm)", fontsize=16)
+    plt.ylabel("Intensity (a.u.)", fontsize=16)
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    plt.savefig(name_fig, dpi=300)
+    print(f"✔  Profil sauvegardé dans : {name_fig}")
+
+def coherence(I, dx, dy, alpha):
+    ''' I is the intensity, convolution in real space with gaussian function
+    '''
+    Ny, Nx = I.shape
+    x = (np.arange(Nx) - (Nx - 1) / 2)*dx
+    y = (np.arange(Ny) - (Ny - 1) / 2)*dy
+    X, Y = np.meshgrid(x, y)
+
+    if alpha==0:
+        return I
+    else:
+        alpha_R = 1/(4*alpha)
+        print("alpha for divergence in image plane (m^-2)= ", alpha_R)
+        G = np.exp(-alpha_R*(X**2 + Y**2)) #gaussian exp(-alpha*r^2)
+        G /= G.sum()          # normalisation
+        return fftconvolve(I, G, mode='same')
+
+def amplitude(I, length, crop, elec=1): #elec = nb d'electrons pour match experimental image, data
+    ''' attempt of fitting experimental image amplitude '''
+    Nx, Ny = length.shape
+    if crop==True:
+        y1 = Ny + math.ceil(Ny/4)
+        y2 = 2*Ny - math.ceil(Ny/4)
+        x1 = Nx + math.ceil(Nx/4)
+        x2 = 2*Nx - math.ceil(Nx/4)
+        length_ampl=length[y1:y2,x1:x2]
+    else:
+        length_ampl=length
+    norm_length=length_ampl/np.max(length_ampl) #error here to be corrected
+    Id = np.ones_like(I)
+    ampl = Id*elec-0.5*elec*norm_length
+    return I*ampl
+
+def add_elec_phase(phase, length, Ce, V0):
+    ''' add electrostatic component to the phase '''
+    return phase + length*Ce*V0
+
+def str2bool(v):    
+    ''' convert string to boolean '''
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("yes", "true", "t", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
+    
+def parse_args(): #ajouter option alpha pour la coherence du faisceau
+    ''' parsing of the command line '''
+    p = argparse.ArgumentParser()
+    p.add_argument("phaseFileName", help="phase map file in a PNG container unsigned 16-bit")
+    p.add_argument("thicknessMapFileName", help="thickness map file in a PNG container unsigned 16-bit")
+    p.add_argument("--version",action='version',version=__version__, help="show the version number")
+    p.add_argument("--defocus", type=float, default=0.5E-3, help="defocusing parameter in m, default= 0.5e-3 m")
+    p.add_argument("--convergence", type=float, default=0.001E-3, help="convergence in rad, default= 1e-6 rad")
+    p.add_argument("--E0", type=float, default=200e3, help="Voltage E0 in eV, default= 2e5 eV")
+    p.add_argument("--Cs", type=float, default=1.2e-3, help="Constant Cs in m, default= 1.2e-3 m")
+    p.add_argument("--V0", type=float, default=20, help="Voltage V0 in V, default= 20 V")
+    p.add_argument("--crop", type=str2bool, default=False, help="Enable cropping (true/false), default= False") #change crop to false if full image
+    p.add_argument("--mode", type=str, default="default", help="Available options: mirrored|default, default= default")
+
+    return p.parse_args()
+
+def main():
+    args = parse_args()
+
+    # Load phase + metadata
+    phase, dx, dy = load_png(args.phaseFileName,True)
+    length,_,_ = load_png(args.thicknessMapFileName,False)
+    
+    #phase=remove_edge_discontinuity(phase)
+    # Fallback si dx/dy absents
+    if dx is None or dy is None:
+        dx = dy = 1e-9
+        print(f"⚠ missing dx/  or dy → default value dx = dy = {dx} m used\n")
+
+    print("→ Simulation parameters:\n")
+    print(f"   Voltage E0 = {args.E0} eV\n")
+    print(f"   Defocus    = {args.defocus} m\n")
+    print(f"   convergence = {args.convergence} rad\n")
+    print(f"   Constant Cs = {args.Cs} m\n")
+    print(f"   Image crop (by 2) = {args.crop}\n")
+    C_e=electrical_constant(args.E0)
+    print("Ce computed from E0, in (V*m)^-1 : ", C_e)
+    
+    phase = add_elec_phase(phase, length, C_e, args.V0) # Ce=6.53E6 at 300kV, 7.288E6 at 200kV
+    # Simulation Fresnel
+    if args.mode=="mirrored":
+        I = simulate_fresnel_mirrored(phase, dx, dy, crop=args.crop, E0_eV=args.E0, defocus=args.defocus, Cs=args.Cs)
+        print("Intensity computed using Mirrored computation method")
+    else:
+        I= simulate_fresnel_enveloppe(phase, dx, dy, E0_eV=args.E0, defocus=args.defocus, Cs=args.Cs) # E0_eV=200e3, defocus=2e-6, Cs=1.2e-3, convergence=0
+        print("Intensity computed using Default computation method")
+    
+    defocus = args.defocus
+    convergence = args.convergence
+    alpha_F = (np.pi*defocus*convergence)**2/np.log(2)
+    I_mod = coherence(I, dx, dy, alpha_F)
+    #I_ampl= amplitude(I, length, crop=args.crop, elec=1)
+    I_used=I_mod
+    profile_fresnel(I_used, dx, dy, color='blue', label="profile", name_fig=f"fresnel_profile_crop_{args.crop}_defoc_{args.defocus}m.png")
+    
+    Ny, Nx = I.shape
+    extent_nm = (-(Nx*dx)/2*1e9, (Nx*dx)/2*1e9, -(Ny*dy)/2*1e9, (Ny*dy)/2*1e9)
+    
+    # --- Génération dynamique des métadonnées physiques et géométriques ---
+    maintenant = datetime.now()
+    dict_metadata = {
+        "Creation_Date": maintenant.strftime("%Y-%m-%d"),
+        "Creation_Time": maintenant.strftime("%H:%M:%S"),
+        "Simulation_Type": "Fresnel Contrast Simulation Map",
+        # Métadonnées Géométriques (Dimensions)
+        "Pixel Width": str(dx),
+        "Pixel Height": str(dy),
+        "Pixel Unit": "m",
+        "Image_Crop_Enabled": str(args.crop),
+        "Computation_Mode": str(args.mode),
+        # Métadonnées Physiques
+        "Param_E0": str(args.E0),
+        "Param_E0_Unit": "eV",
+        "Param_Defocus": str(args.defocus),
+        "Param_Defocus_Unit": "m",
+        "Param_Convergence": str(args.convergence),
+        "Param_Convergence_Unit": "rad",
+        "Param_Cs": str(args.Cs),
+        "Param_Cs_Unit": "m",
+        "Param_V0": str(args.V0),
+        "Param_V0_Unit": "V",
+        "Computed_Ce": str(C_e),
+        "Computed_Ce_Unit": "(V*m)^-1"
+    }
+
+    # plot and save fresnel contrast image 
+    plt.figure(figsize=(7,6))
+    plt.imshow(I_used, cmap="gray", extent=extent_nm) #possible d'ajouter en option de imshow vmin et vmax pour fixer les valeurs min/max d'intensité.
+    plt.xlabel("x (nm)")
+    plt.ylabel("y (nm)")
+    plt.title("Fresnel Contrast")
+    plt.colorbar(label="Intensity")
+    nameplot=f"fresnel_image_crop_{args.crop}_defoc_{args.defocus}m.png"
+    
+    # --- MODIFICATION : Injection de dict_metadata via le paramètre optionnel de savefig ---
+    plt.savefig(nameplot, dpi=150, metadata=dict_metadata)
+    plt.close()
+    print(f"✔  Image saved in file {nameplot}")
+
+__version__ = '1.0.0'
+if __name__ == "__main__":
+    main()
