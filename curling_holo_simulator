@@ -140,7 +140,8 @@ def simuler_curling():
     rho_grid = np.linspace(epsilon, 1.0, N_BVP)
     # Linear 'guess' profile to push the solver toward the non-trivial solution
     if Ku < 0:
-        omega_guess = (np.pi / 2) * (rho_grid - epsilon) / (1.0 - epsilon)
+        # omega_guess = (np.pi / 2) * rho_grid 
+        omega_guess = (np.pi / 2) * np.tanh(rho_grid*(2-rho_grid))
     else:
         omega_guess = 0 * rho_grid
     y_guess = np.vstack([omega_guess, np.gradient(omega_guess, rho_grid)])
