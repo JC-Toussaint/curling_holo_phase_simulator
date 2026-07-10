@@ -150,6 +150,20 @@ def simuler_curling():
     print("[Euler-Lagrange / BVP] Convergence status:", sol.message)
     omega_bvp = sol.sol(rho_grid)[0]
 
+    # --- Step B bis: Check that omega(rho) is monotonically increasing ---
+    # Derivative of omega with respect to rho, evaluated on the grid via the spline
+    domega_drho_bvp = sol.sol(rho_grid)[1]
+
+    if np.all(domega_drho_bvp >= -1e-12):  # numerical tolerance
+        print("[Monotonicity] omega(rho) is increasing over the entire domain.")
+    else:
+        print("\n" + "="*50)
+        print("[Monotonicity] ERROR: omega(rho) is not monotonically increasing over the domain.")
+        print("The BVP solution does not satisfy the expected physical behavior.")
+        print("Stopping execution.")
+        print("="*50 + "\n")
+        sys.exit(1)
+
     # --- Step C: Computing the integration profile I(y) ---
     # Vectorization of the function for optimized execution over a NumPy array
     compute_I_vectorized = np.vectorize(lambda y: compute_I(y, R, sol.sol))
