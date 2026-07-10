@@ -1,9 +1,0 @@
-domega_drho_bvp = sol.sol(rho_grid)[1]
-
-if np.all(domega_drho_bvp >= -1e-12):      # tolérance numérique
-    print("[Monotonie] omega(rho) est croissante sur tout le domaine.")
-elif np.all(domega_drho_bvp <= 1e-12):
-    print("[Monotonie] omega(rho) est décroissante sur tout le domaine.")
-else:
-    n_changements = np.sum(np.diff(np.sign(domega_drho_bvp)) != 0)
-    print(f"[Monotonie] omega(rho) N'EST PAS monotone : {n_changements} changement(s) de signe détecté(s).")

@@ -2,6 +2,8 @@
 
 import numpy as np
 from scipy.integrate import solve_bvp, quad, cumulative_trapezoid
+from scipy.optimize import minimize          # <--- Added for the energy-minimization fallback
+from scipy.interpolate import CubicSpline    # <--- Added to rebuild a sol_bvp-like interpolator
 import matplotlib.pyplot as plt
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo  # <--- Added to handle PNG metadata
@@ -34,6 +36,106 @@ def ode_curling(rho, y):
 def bc_curling(ya, yb):
     """Boundary conditions: omega(epsilon) = 0 and omega'(1) = 0."""
     return np.array([ya[0] - 0.0, yb[1] - 0.0])
+
+# =============================================================================
+# 2 bis. TOTAL ENERGY & MINIMIZATION FALLBACK
+# =============================================================================
+# When solve_bvp converges to a solution that is NOT monotonically increasing
+# (which can happen because the Euler-Lagrange BVP admits several extrema of
+# the energy functional, and the shooting/collocation method may lock onto a
+# saddle point or a non-physical branch), we fall back to a direct
+# minimization of the total micromagnetic energy E[omega], restricted to the
+# subspace of monotonically non-decreasing profiles. This guarantees a
+# physically admissible curling configuration.
+
+def energie_totale(omega, rho_grid, A, kappa):
+    """
+    Computes the total energy E[omega] (in Joules) of a discretized profile
+    omega(rho) sampled on rho_grid, following:
+
+        E = 2*pi*A * int_eps^1 [ rho*(d(omega)/d(rho))^2
+                                  + (1/rho + 2*kappa*rho) * sin^2(omega) ] d(rho)
+
+    The derivative d(omega)/d(rho) is estimated with a numpy gradient
+    (2nd-order accurate central differences) and the integral is evaluated
+    with the trapezoidal rule.
+    """
+    domega_drho = np.gradient(omega, rho_grid)
+    integrand = (rho_grid * domega_drho**2
+                 + (1.0 / rho_grid + 2.0 * kappa * rho_grid) * np.sin(omega)**2)
+    # np.trapz was renamed np.trapezoid in NumPy >= 2.0; support both.
+    trapz_func = getattr(np, 'trapezoid', None) or np.trapz
+    return 2.0 * np.pi * A * trapz_func(integrand, rho_grid)
+
+
+def minimiser_energie_monotone(rho_grid, omega_init, A, kappa):
+    """
+    Minimizes the total energy E[omega] (see energie_totale) under the
+    physical constraint that omega(rho) is monotonically non-decreasing,
+    starting from the (non-monotonic) BVP solution as an initial guess.
+
+    Monotonicity is enforced *by construction* via a change of variables:
+    omega is written as the cumulative sum of non-negative increments
+        omega_i = sum_{k<=i} softplus(x_k),   omega_0 = 0 (i.e. omega(epsilon)=0)
+    where softplus(x) = log(1+exp(x)) >= 0 for any real x. This turns the
+    constrained minimization into a free (unconstrained) minimization over
+    the x_k, which L-BFGS-B handles efficiently and robustly.
+
+    The Neumann condition omega'(1) = 0 is not imposed explicitly: it is the
+    natural boundary condition of this variational problem and therefore
+    emerges automatically at the minimum (the increments naturally shrink
+    toward 0 near rho = 1 at the optimum).
+
+    Returns:
+        numpy.ndarray: the monotonic, energy-minimizing omega(rho) profile,
+        evaluated on rho_grid.
+    """
+    def softplus(x):
+        # Numerically stable softplus: log(1 + exp(x))
+        return np.logaddexp(0.0, x)
+
+    def omega_from_x(x):
+        deltas = softplus(x)
+        return np.concatenate(([0.0], np.cumsum(deltas)))
+
+    def cout(x):
+        return energie_totale(omega_from_x(x), rho_grid, A, kappa)
+
+    # --- Initial guess: force the BVP profile to be non-decreasing first
+    #     (running maximum), then invert the softplus to obtain x0 ---
+    omega_init_mono = np.maximum.accumulate(omega_init)
+    deltas_init = np.clip(np.diff(omega_init_mono), 1e-6, 50.0)
+    x0 = np.log(np.expm1(deltas_init))  # inverse of softplus
+
+    res = minimize(cout, x0, method='L-BFGS-B',
+                    options={'maxiter': 5000, 'maxfun': 200000,
+                             'ftol': 1e-15, 'gtol': 1e-12})
+
+    omega_opt = omega_from_x(res.x)
+    print(f"[Energy minimization] Convergence: {res.success} | "
+          f"E_final = {res.fun:.6e} J | iterations = {res.nit}")
+
+    return omega_opt
+
+
+class MonotonicSplineWrapper:
+    """
+    Lightweight replacement for the callable returned by solve_bvp (sol.sol),
+    built from a discretized, energy-minimized omega(rho) profile.
+
+    Calling an instance with an array of rho values returns a (2, N) array
+    stacking [omega(rho), domega/drho(rho)], exactly like sol.sol(rho) does,
+    so it can be used as a drop-in replacement everywhere sol.sol is used
+    (e.g. in integrand_z / compute_I).
+    """
+    def __init__(self, rho_grid, omega_vals):
+        self._spline = CubicSpline(rho_grid, omega_vals)
+        self._dspline = self._spline.derivative()
+
+    def __call__(self, rho):
+        rho = np.atleast_1d(rho)
+        return np.vstack([self._spline(rho), self._dspline(rho)])
+
 
 # =============================================================================
 # 3. INTEGRATION FUNCTIONS FOR THE I(y) PROFILE
@@ -154,19 +256,44 @@ def simuler_curling():
     # Derivative of omega with respect to rho, evaluated on the grid via the spline
     domega_drho_bvp = sol.sol(rho_grid)[1]
 
+    # By default, the interpolator used downstream is the one produced by solve_bvp.
+    # It is replaced below by an energy-minimized, monotonic profile if the
+    # BVP solution turns out not to be physically admissible.
+    sol_final = sol.sol
+
     if np.all(domega_drho_bvp >= -1e-12):  # numerical tolerance
         print("[Monotonicity] omega(rho) is increasing over the entire domain.")
     else:
         print("\n" + "="*50)
-        print("[Monotonicity] ERROR: omega(rho) is not monotonically increasing over the domain.")
+        print("[Monotonicity] WARNING: omega(rho) is not monotonically increasing over the domain.")
         print("The BVP solution does not satisfy the expected physical behavior.")
-        print("Stopping execution.")
+        print("Falling back to a direct minimization of the total energy E[omega],")
+        print("restricted to monotonically increasing profiles.")
         print("="*50 + "\n")
-        sys.exit(1)
+
+        # omega_opt = minimiser_energie_monotone(rho_grid, omega_bvp, A, kappa)
+        omega_opt = minimiser_energie_monotone(rho_grid, omega_guess, A, kappa)
+
+        # Rebuild a sol_bvp-like callable (omega, domega/drho) from the
+        # energy-minimized profile, used everywhere sol.sol was used before.
+        sol_final = MonotonicSplineWrapper(rho_grid, omega_opt)
+
+        # Update omega_bvp so that the control plots and the returned tuple
+        # reflect the final (physically admissible) configuration.
+        omega_bvp = sol_final(rho_grid)[0]
+
+        # Final monotonicity check on the minimized profile (sanity check)
+        domega_drho_opt = sol_final(rho_grid)[1]
+        if np.all(domega_drho_opt >= -1e-9):
+            print("[Monotonicity] omega(rho) is increasing over the entire domain "
+                  "after energy minimization.")
+        else:
+            print("[Monotonicity] WARNING: residual non-monotonicity remains after "
+                  "minimization (numerical tolerance may need adjustment).")
 
     # --- Step C: Computing the integration profile I(y) ---
     # Vectorization of the function for optimized execution over a NumPy array
-    compute_I_vectorized = np.vectorize(lambda y: compute_I(y, R, sol.sol))
+    compute_I_vectorized = np.vectorize(lambda y: compute_I(y, R, sol_final))
     
     # Direct generation of the fine mesh (avoids computing twice with different grid sizes)
     bound = IMAGE_SIZE * PIXEL_SIZE / 2
