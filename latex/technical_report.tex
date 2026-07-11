@@ -1,0 +1,171 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{amsmath,amsfonts,amssymb,bm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Custom math commands
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\rhoadj}{\rho}
+\newcommand{\kappaadim}{\kappa}
+\newcommand{\epsilonadim}{\epsilon}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codeblue}{rgb}{0.1,0.2,0.8}
+\definecolor{backcolour}{rgb}{0.96,0.96,0.94}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{codeblue},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{purple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+\title{\textbf{Technical Report: Numerical Modeling of Micromagnetic Curling Modes and Off-Axis Electron Holography Phase Profiles}}
+\author{\textbf{Technical Documentation}}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document provides a comprehensive analysis of the accompanying Python solver designed for simulating the micromagnetic magnetization configuration of a cylindrical nanowire undergoing a \textit{curling mode} transition. The script solves the non-linear Euler-Lagrange boundary value problem (BVP) governing the magnetization tilt angle profile, implements a robust unconstrained optimization framework using a softplus variable transformation to handle non-monotonicity BVP failure modes, and computes the experimental observables corresponding to off-axis Transmission Electron Aberration-Corrected Holography. Specifically, it simulates the 2D projected magnetic phase shift $\Phi(y)$ and structural thickness profiles, exporting them as high-precision 16-bit PNG maps equipped with extensive simulation metadata.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introduction and Physical Context}
+In low-dimensional ferromagnetic structures, such as elongated cylindrical nanorods or nanowires, the equilibrium configuration of magnetization $\bm{M}(\bm{r})$ is governed by a competition between exchange energy, magnetocrystalline anisotropy, and magnetostatic (demagnetizing) stray field energy. 
+
+When transitioning from a uniform axial state to a reversed state, or under specific geometric constraints where the wire radius $R$ exceeds a critical exchange length, the system favors a **curling mode**. The curling mode is a continuous magnetization vortex configuration where the magnetic moments tilt progressively from the longitudinal direction toward an azimuthal angle. Crucially, this divergence-free mode ($\nabla \cdot \bm{M} = 0$) completely eliminates the volume magnetostatic stray fields inside the bulk of the wire, minimizing the overall stray field cost at the expense of an increase in exchange energy.
+
+The analyzed code acts as a complete physical workflow that maps material constants and geometric dimensions into an exact spatial profile of the curling state, subsequently modeling how this state would appear under an electron microscope using phase-contrast imagery (Electron Holography).
+
+---
+
+\section{Mathematical Formulation of the Curling Mode}
+
+\subsection{Coordinate System and Magnetization Vector}
+Let us consider an infinitely long ferromagnetic cylinder of outer radius $R$ aligned along the $z$-axis. Using cylindrical coordinates $(r, \phi, z)$, the magnetization vector field $\bm{M}(\bm{r})$ is parameterized under the constant saturation magnetization constraint $\|\bm{M}\| = M_s$:
+\begin{equation}
+    \bm{M}(r) = M_s \left[ \sin\omega(r) \hat{\bm{\phi}} + \cos\omega(r) \hat{\bm{z}} \right]
+\end{equation}
+where $\omega(r)$ is the localized tilt angle relative to the cylinder axis. By symmetry, $\omega$ depends solely on the radial coordinate $r$.
+\begin{itemize}
+    \item At the center of the core ($r \to 0$), $\omega \to 0$, forcing the magnetization to point strictly along the wire axis.
+    \item As $r \to R$, $\omega(r)$ increases, causing the outer shell to wrap azimuthally.
+\end{itemize}
+
+\subsection{The Variational Problem and Euler-Lagrange Equations}
+The total micromagnetic energy density per unit length includes the exchange energy contribution (parameterized by the exchange constant $A$, in J/m) and a uniaxial magnetocrystalline anisotropy contribution (parameterized by $K_u$, in J/m$^3$). The total energy functional $E[\omega]$ can be written as:
+\begin{equation}
+    E[\omega] = 2\pi \int_{\epsilon R}^R \left[ A \left( \left(\frac{\dd \omega}{\dd r}\right)^2 + \frac{\sin^2\omega}{r^2} \right) + K_u \sin^2\omega \right] r \,\dd r
+\end{equation}
+
+To non-dimensionalize the system, we introduce the normalized radius $\rhoadj = r/R \in [0, 1]$. The functional becomes:
+\begin{equation}
+    E[\omega] = 2\pi A \int_\epsilon^1 \left[ \rhoadj \left(\frac{\dd \omega}{\dd \rhoadj}\right)^2 + \left( \frac{1}{\rhoadj} + 2\kappaadim\rhoadj \right)\sin^2\omega \right] \dd\rhoadj
+\end{equation}
+where the dimensionless parameter $\kappaadim$ is defined as:
+\begin{equation}
+    \kappaadim = \frac{K_u R^2}{2A}
+\end{equation}
+
+Taking the first variation $\delta E[\omega] = 0$ yields the non-linear second-order ordinary differential equation (ODE), representing the **Euler-Lagrange equation** for the system:
+\begin{equation}\label{eq:el_ode}
+    \frac{\dd^2\omega}{\dd\rhoadj^2} = -\frac{1}{\rhoadj}\frac{\dd\omega}{\dd\rhoadj} + \left( \frac{1}{2\rhoadj^2} + \kappaadim \right)\sin(2\omega)
+\end{equation}
+
+\subsection{Boundary Conditions and Regularization}
+The physical system imposes a Neumann boundary condition at the outer radius due to surface exchange torque omission:
+\begin{equation}
+    \left.\frac{\dd\omega}{\dd\rhoadj}\right|_{\rhoadj=1} = 0
+\end{equation}
+At the origin ($\rhoadj = 0$), the coordinate system exhibits a geometric singularity ($1/\rhoadj$). To bypass numerical issues, the script implements an inner boundary regularization at a microscopic core radius $\epsilonadim = r_0/R = 10^{-6}$:
+\begin{equation}
+    \omega(\epsilonadim) = 0
+\end{equation}
+
+---
+
+\section{Numerical Architecture and Algorithmic Fallback}
+
+The script leverages a dual-stage numerical approach to ensure convergence toward a physically valid, stable solution branch.
+
+\subsection{Collocation BVP Solver}
+The system of equations is transformed into a first-order state-space vector $y = [\omega, \, \dd\omega/\dd\rhoadj]^T$. The function \texttt{ode\_curling} defines the vector field:
+\begin{equation}
+    \frac{\dd}{\dd\rhoadj} \begin{bmatrix} y_0 \\ y_1 \end{bmatrix} = \begin{bmatrix} y_1 \\ -\frac{y_1}{\rhoadj} + \left(\frac{1}{2\rhoadj^2} + \kappaadim\right)\sin(2y_0) \end{bmatrix}
+\end{equation}
+This system is passed to \texttt{scipy.integrate.solve\_bvp} alongside a tanh-based hyperbolic initial guess profile to trigger convergence into the non-trivial configuration branch when $K_u < 0$.
+
+\subsection{Constrained Energy Minimization Fallback}
+Because the Euler-Lagrange BVP admits several mathematical extrema (including non-physical saddle points or oscillating branches), the script executes a post-solution validation check. A physically authentic curling configuration dictates that $\omega(\rhoadj)$ must be monotonically non-decreasing over $\rhoadj \in [\epsilonadim, 1]$. 
+
+If the condition $\frac{\dd\omega}{\dd\rhoadj} \ge 0$ is violated numerically, the framework abandons the BVP solution and triggers an alternative **direct energy minimization solver** (\texttt{minimize\_monotonic\_energy}).
+
+To guarantee absolute monotonicity *by construction* within an unconstrained optimizer (\texttt{L-BFGS-B}), the script performs a transformation of variables. Let the spatial domain be discretized into a grid of $N$ points. The continuous function is reconstructed from non-negative discrete parameter increments $x_k \in \mathbb{R}$ passed through a smooth \textit{softplus} rectifier activation function:
+\begin{equation}
+    \Delta \omega_k = \text{softplus}(x_k) = \ln(1 + e^{x_k}) \ge 0
+\end{equation}
+The angle distribution is then assembled via cumulative integration:
+\begin{equation}
+    \omega_0 = 0, \quad \omega_i = \sum_{k=1}^i \Delta \omega_k
+\end{equation}
+The standard L-BFGS-B algorithm optimizes the underlying unconstrained array $\bm{x}$ to minimize the total discrete energy functional computed via central differences and trapezoidal integrations. The optimized array is wrapped inside a custom \texttt{CubicSpline} class (\texttt{MonotonicSplineWrapper}) to maintain API compatibility with standard BVP output structures.
+
+---
+
+\section{Forward Modeling of Off-Axis Electron Holography}
+
+Once the continuous spatial mapping $\omega(\rhoadj)$ is acquired, the script models the phase change imparted to a relativistic electron beam passing perpendicularly through the object along the $z$-axis (transmission path), as depicted in Figure 1.
+
+\begin{figure}[h]
+    \centering
+    \label{fig:schematic}
+    \caption{Schematic cross-section of the nanowire showing the integration path along the electron optical axis $z$ at an impact parameter $y$.}
+\end{figure}
+
+The phase shift $\Phi(y)$ detected in off-axis electron holography consists of electrostatic and magnetic parts. Assuming a pure magnetic contribution driven by the vector potential, the phase profile is dictated by the projection of the magnetic induction along the path:
+\begin{equation}
+    I(y) = -\mu_0 M_s \int_{-\sqrt{R^2-y^2}}^{+\sqrt{R^2-y^2}} \cos\omega\left(\frac{\sqrt{y^2+z^2}}{R}\right) \dd z
+\end{equation}
+The script executes this using high-order Adaptive Gaussian Quadrature (\texttt{scipy.integrate.quad}). The total accumulated holographic phase shift $\Phi(y)$ is subsequently retrieved via the integration of the vector profile:
+\begin{equation}
+    \Phi(y) = -\frac{e}{\hbar} \int_0^y I(y') \,\dd y'
+\end{equation}
+which is implemented computationally using a cumulative trapezoidal rule (\texttt{cumulative\_trapezoid}). An anti-symmetrization step completes the map to cover the symmetric domain from $-y_{\text{bound}}$ to $+y_{\text{bound}}$.
+
+---
+
+\section{Software Features and Technical Data Export}
+
+The program is engineered as a production-ready command-line tool featuring several core enhancements:
+\begin{enumerate}
+    \item \textbf{Dynamic Argument Parsing:} It exposes physical inputs via standard command-line structures (\texttt{IMAGE\_SIZE}, \texttt{PIXEL\_SIZE}, exchange parameter \texttt{--A}, anisotropy value \texttt{--Ku}, saturation magnetization \texttt{--Ms}, and radius \texttt{--R}).
+    \item \textbf{16-Bit Image Map Generation:} Quantized values spanning the phase and object thickness variables are translated onto a strict unsigned 16-bit raster grid range $[0, 65535]$.
+    \item \textbf{Embedded Metadata Validation:} To facilitate reproducibility and traceable data indexing, real floating-point physical boundaries (\texttt{Value Min}, \texttt{Value Max}), operational keys, structural metrics ($\kappaadim$), and spatial pixel increments are embedded directly into the header chunks of the produced PNG image binary via standard \texttt{PngInfo} text segments.
+\end{enumerate}
+
+\end{document}
