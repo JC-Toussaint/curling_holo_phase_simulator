@@ -16,6 +16,11 @@ import sys
 import os
 import argparse
 
+# Codes de couleur ANSI
+GREEN = "\033[92m"
+RED = "\033[91m"
+RESET = "\033[0m"
+
 class CustomHelpFormatter(argparse.RawDescriptionHelpFormatter, argparse.ArgumentDefaultsHelpFormatter):
     pass
 
@@ -262,10 +267,10 @@ def simulate_curling():
     sol_final = sol.sol
 
     if np.all(domega_drho_bvp >= -1e-12):  # numerical tolerance
-        print("[Monotonicity] omega(rho) is increasing over the entire domain.")
+        print(f"{GREEN}[Monotonicity]{RESET} omega(rho) is increasing over the entire domain.")
     else:
         print("\n" + "="*50)
-        print("[Monotonicity] WARNING: omega(rho) is not monotonically increasing over the domain.")
+        print(f"{RED}[Monotonicity] WARNING:{RESET} omega(rho) is not monotonically increasing over the domain.")
         print("The BVP solution does not satisfy the expected physical behavior.")
         print("Falling back to a direct minimization of the total energy E[omega],")
         print("restricted to monotonically increasing profiles.")
@@ -439,7 +444,7 @@ def export_16bit_maps(phase_vals, thick_vals):
     output_image_path_phase = os.path.join(SCRIPT_DIR, 'analytics_HOLO_PHASE.png')
     img_phase.save(output_image_path_phase, pnginfo=metadata_phase)
 
-    print(f"[Success] 16-bit image (with metadata) saved to:\n -> {output_image_path_phase}")
+    print(f"{GREEN}[Sucess]{RESET} 16-bit image (with metadata) saved to:\n -> {output_image_path_phase}")
 
     # Display the image
     plt.imshow(img_phase, cmap="gray")
@@ -497,7 +502,7 @@ def export_16bit_maps(phase_vals, thick_vals):
     output_image_path_thick = os.path.join(SCRIPT_DIR, 'analytics_PATH_LENGTH.png')
     img_thick.save(output_image_path_thick, pnginfo=metadata_thick)
 
-    print(f"[Success] 16-bit image (with metadata) saved to:\n -> {output_image_path_thick}")
+    print(f"{GREEN}[Sucess]{RESET} 16-bit image (with metadata) saved to:\n -> {output_image_path_thick}")
 
     # Display the image
     plt.imshow(img_thick, cmap="gray")
