@@ -15,6 +15,7 @@ from datetime import datetime
 import sys
 import os
 import argparse
+import time  # <--- Added for execution timing benchmarking
 
 # Codes de couleur ANSI
 GREEN = "\033[92m"
@@ -189,15 +190,8 @@ def configure_arguments():
     exemples = """
     usage examples:
          %(prog)s 1000 2e-10 --Ku=-1e4 --R 100e-9
-         %(prog)s 1000 2e-10 --A 1.5e-11 --Ku=-2e4 --R 100e-9
+         %(prog)s 1000 2e-10 --A 1.5e-11 --Ku=-2e4 --R 100e-9 --no-plots
     """
-
-    #parser = argparse.ArgumentParser(
-    #    description=description_text,
-    #    epilog=exemples,
-    #    formatter_class=argparse.RawDescriptionHelpFormatter,
-    #    prefix_chars='-+'  # Better handling of plus and minus signs
-    #)
 
     parser = argparse.ArgumentParser(
         description=description_text,
@@ -215,6 +209,10 @@ def configure_arguments():
     parser.add_argument('--Ku', type=float, default = -1e4, help="Uniaxial anisotropy constant (J/m^3)")
     parser.add_argument('--Ms', type=float, default = 1.00531 / mu_0, help="Magnetization (A/m)")
     parser.add_argument('--R',  type=float, default = 100e-9, help="Outer radius of the cylinder (m)")
+    
+    # New options to disable figure displaying/generation
+    parser.add_argument('--no-plots', '--nograph', action='store_true', dest='no_plots',
+                        help="Disable figure display and rendering (faster execution)")
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -321,10 +319,13 @@ def simulate_curling():
     return rho_grid, omega_bvp, y_vals, phase_vals, thick_vals
 
 
-def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals):
+def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals, show_plots=True):
     """
     Generates and saves the simulation's control plots.
     """
+    if not show_plots:
+        return
+
     print("[Plots] Generating control plots...")
     
     # Fig 1: Dimensionless curling profile
@@ -337,18 +338,6 @@ def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals):
     plt.tight_layout()
     plt.savefig(os.path.join(SCRIPT_DIR, 'curling_mode_adim.png'), dpi=150)
     plt.show()
-    #plt.close()
-
-    # Fig 2: Integral projection profile I(y)
-    # plt.figure(figsize=(6, 4))
-    # plt.plot(y_vals * 1e9, I_vals, '-', lw=2.5, color='tab:blue', label=r'$I(y)$')
-    # plt.xlabel(r'$y$ [nm]')
-    # plt.ylabel(r'$I(y)$ [UA]')
-    # plt.title(r"Profile of the integral $I(y)$")
-    # plt.grid(alpha=0.3)
-    # plt.tight_layout()
-    # plt.savefig(os.path.join(SCRIPT_DIR, 'integrale_I_y.png'), dpi=150)
-    # plt.close()
 
     # Fig 3: Phase profile Phi(y)
     plt.figure(figsize=(6, 4))
@@ -371,7 +360,6 @@ def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals):
     plt.text(0.05, 0.80, info_text, transform=plt.gca().transAxes,
              fontsize=10, verticalalignment='top',
              bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8, edgecolor='gray'))
-    # ----------------------------------------------
 
     plt.xlabel(r'$y$ [nm]')
     plt.ylabel(r'$\Phi(y)$ [rad]')
@@ -380,10 +368,9 @@ def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals):
     plt.tight_layout()
     plt.savefig(os.path.join(SCRIPT_DIR, 'phase_profile_y.png'), dpi=150)
     plt.show()
-    #plt.close()
 
 
-def export_16bit_maps(phase_vals, thick_vals):
+def export_16bit_maps(phase_vals, thick_vals, show_plots=True):
     """
     Generates, normalizes and exports the 2D grayscale 16-bit images
     (Phase map and Thickness map) with their respective metadata.
@@ -417,7 +404,6 @@ def export_16bit_maps(phase_vals, thick_vals):
     # --- Creation of the Metadata object ---
     metadata_phase = PngInfo()
     metadata_phase.add_text("Simulation_Type", "Curling Holo Phase Simulator - Phase Map")
-    # Adding date and time
     metadata_phase.add_text("Creation_Date", date_creation)
     metadata_phase.add_text("Creation_Time", heure_creation)
 
@@ -434,50 +420,38 @@ def export_16bit_maps(phase_vals, thick_vals):
     metadata_phase.add_text("Pixel Height", str(PIXEL_SIZE))
     metadata_phase.add_text("Pixel Unit", "m")
 
-    # Very important to be able to redo the simulation or reconstruct the real Phase values:
-    # We store the extrema used for the [0, 65535] normalization
     metadata_phase.add_text("Value Min", str(phase_min))
     metadata_phase.add_text("Value Max", str(phase_max))
     metadata_phase.add_text("Value Unit", "rad")
 
-    # Forced save into SCRIPT_DIR, passing the pnginfo object
     output_image_path_phase = os.path.join(SCRIPT_DIR, 'analytics_HOLO_PHASE.png')
     img_phase.save(output_image_path_phase, pnginfo=metadata_phase)
 
     print(f"{GREEN}[Sucess]{RESET} 16-bit image (with metadata) saved to:\n -> {output_image_path_phase}")
 
-    # Display the image
-    plt.imshow(img_phase, cmap="gray")
-    # plt.axis("off")  # Hide the axis ticks (optional)
-    plt.show()
+    if show_plots:
+        plt.imshow(img_phase, cmap="gray")
+        plt.show()
 
     # -------------------------------------------------------------------------
     # EXPORT THICKNESS MAP (16-BIT PNG) + METADATA
     # -------------------------------------------------------------------------
-    # --- EXTREMA VALUES ---
     thick_min, thick_max = np.min(thick_vals), np.max(thick_vals)
 
-    # Strict linear normalization within the 16-bit encoding range [0, 65535]
     if thick_max != thick_min:
         thick_normalized = (thick_vals - thick_min) / (thick_max - thick_min) * 65535
     else:
         thick_normalized = np.zeros_like(thick_vals)
 
-    # Explicit cast of the array to the unsigned 16-bit integer type
     thick_16bit = thick_normalized.astype(np.uint16)
-
-    # Creation of the 2D matrix (strict phase invariance along the z axis)
     thick_map_2d = np.tile(thick_16bit, (IMAGE_SIZE, 1))
 
-    # Generation of the 16-bit grayscale image
     img_thick = Image.fromarray(thick_map_2d)
 
-    # --- Creation of the Metadata object ---
     metadata_thick = PngInfo()
     metadata_thick.add_text("Simulation_Type", "Curling Holo Phase Simulator - Thickness Map")
-    # Adding date and time
-    metadata_phase.add_text("Creation_Date", date_creation)
-    metadata_phase.add_text("Creation_Time", heure_creation)
+    metadata_thick.add_text("Creation_Date", date_creation)
+    metadata_thick.add_text("Creation_Time", heure_creation)
 
     metadata_thick.add_text("Param_A", str(A))
     metadata_thick.add_text("Param_Ku", str(Ku))
@@ -492,28 +466,25 @@ def export_16bit_maps(phase_vals, thick_vals):
     metadata_thick.add_text("Pixel Height", str(PIXEL_SIZE))
     metadata_thick.add_text("Pixel Unit", "m")
 
-    # Very important to be able to redo the simulation or reconstruct the real Phase values:
-    # We store the extrema used for the [0, 65535] normalization
     metadata_thick.add_text("Value Min", str(thick_min))
     metadata_thick.add_text("Value Max", str(thick_max))
     metadata_thick.add_text("Value Unit", "m")
 
-    # Forced save into SCRIPT_DIR, passing the pnginfo object
     output_image_path_thick = os.path.join(SCRIPT_DIR, 'analytics_PATH_LENGTH.png')
     img_thick.save(output_image_path_thick, pnginfo=metadata_thick)
 
     print(f"{GREEN}[Sucess]{RESET} 16-bit image (with metadata) saved to:\n -> {output_image_path_thick}")
 
-    # Display the image
-    plt.imshow(img_thick, cmap="gray")
-    # plt.axis("off")  # Hide the axis ticks (optional)
-    plt.show()
+    if show_plots:
+        plt.imshow(img_thick, cmap="gray")
+        plt.show()
 
 
 # =============================================================================
 # 5. MAIN EXECUTION
 # =============================================================================
 if __name__ == "__main__":
+    t_start_global = time.perf_counter()
    
     # 1. Argument handling and parsing
     args = configure_arguments()
@@ -529,6 +500,8 @@ if __name__ == "__main__":
     Ms = args.Ms        # Magnetization (A/m)
     R = args.R          # Outer radius in m
 
+    show_plots = not args.no_plots
+
     # --- Computing dependent variables ---
     r0 = R * 1e-6                  # Core radius (numerical singularity avoided), very small compared to R
     kappa = (Ku * R**2) / (2 * A)  # dimensionless quantity
@@ -543,18 +516,36 @@ if __name__ == "__main__":
     print(f" -> Ku : {Ku:.2e} J/m^3")
     print(f" -> Ms : {Ms:.2e} A/m")
     print(f" -> R  : {R:.2e} m")
-    print(f" -> kappa (computed)  : {kappa:.4f}\n")
+    print(f" -> kappa (computed)  : {kappa:.4f}")
+    print(f" -> Display Plots : {show_plots}\n")
     print("="*50 + "\n")
 
     # --- Dynamic determination of the script's directory ---
-    # This variable points absolutely to the folder containing this .py file
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
     # 2. Launching the physical computations
+    t_sim_start = time.perf_counter()
     rho_grid, omega_bvp, y_vals, phase_vals, thick_vals = simulate_curling()
+    t_sim = time.perf_counter() - t_sim_start
 
     # 3. Control plots
-    generate_plots(rho_grid, omega_bvp, y_vals, phase_vals)
+    t_plot_start = time.perf_counter()
+    generate_plots(rho_grid, omega_bvp, y_vals, phase_vals, show_plots=show_plots)
+    t_plot = time.perf_counter() - t_plot_start
 
     # 4. Normalization and export to 16-bit PNG format with metadata
-    export_16bit_maps(phase_vals, thick_vals)
+    t_export_start = time.perf_counter()
+    export_16bit_maps(phase_vals, thick_vals, show_plots=show_plots)
+    t_export = time.perf_counter() - t_export_start
+
+    t_total = time.perf_counter() - t_start_global
+
+    # --- Execution timing report ---
+    print("\n" + "="*50)
+    print("TIMING BENCHMARK / BILAN TEMPS DE CALCUL:")
+    print(f" -> Simulation & Numerical Solving : {t_sim:.4f} s")
+    print(f" -> Control Plots Generation       : {t_plot:.4f} s")
+    print(f" -> 16-bit Maps Export (PNG)       : {t_export:.4f} s")
+    print("-" * 50)
+    print(f" -> TOTAL EXECUTION TIME           : {t_total:.4f} s")
+    print("="*50 + "\n")
