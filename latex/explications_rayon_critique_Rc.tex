@@ -1,0 +1,90 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[french]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+\title{\textbf{Résolution de l'équation différentielle et origine du rayon critique $R_c$}}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Résolution dans la limite $\omega \ll 1$}
+
+On considère l'équation différentielle suivante pour $\omega(\rho)$ :
+\begin{equation}
+\omega''(\rho) + \frac{1}{\rho}\omega'(\rho) - \left(\frac{1}{2\rho^2} + \kappa\right)\sin(2\omega) = 0
+\end{equation}
+avec les conditions aux limites :
+\begin{equation}
+\omega(\varepsilon) = 0, \qquad \omega'(1) = 0
+\end{equation}
+et le paramètre $\kappa$ défini par :
+\begin{equation}
+\kappa = \frac{K_u R^2}{2A}
+\end{equation}
+
+Puisque $K_u < 0$, posons $K_u = -|K_u|$, ce qui donne :
+\begin{equation}
+\kappa = -\frac{|K_u| R^2}{2A} = -\frac{1}{2}\left(\frac{R}{\ell_K}\right)^2 < 0
+\end{equation}
+où la longueur caractéristique de l'isotropie magnétocristalline/d'échange est $\ell_K = \sqrt{\frac{A}{|K_u|}}$.
+
+Dans la limite des faibles angles ($\omega \ll 1$), on utilise l'approximation du premier ordre $\sin(2\omega) \approx 2\omega$. L'équation (1) se linéarise alors sous la forme :
+\begin{equation}
+\omega''(\rho) + \frac{1}{\rho}\omega'(\rho) - \left(\frac{1}{\rho^2} + 2\kappa\right)\omega = 0
+\end{equation}
+En multipliant par $\rho^2$ et en remplaçant $2\kappa$ par $-\left(\frac{R}{\ell_K}\right)^2$, on obtient :
+\begin{equation}
+\rho^2 \omega''(\rho) + \rho \omega'(\rho) + \left[\left(\frac{R}{\ell_K}\right)^2 \rho^2 - 1\right] \omega = 0
+\end{equation}
+
+En effectuant le changement de variable $x = \frac{R}{\ell_K} \rho$, cette équation devient l'équation de Bessel d'ordre 1 :
+\begin{equation}
+x^2 \frac{d^2\omega}{dx^2} + x \frac{d\omega}{dx} + (x^2 - 1)\omega = 0
+\end{equation}
+
+La solution générale est une combinaison linéaire des fonctions de Bessel de première ($J_1$) et de seconde ($Y_1$) espèce :
+\begin{equation}
+\omega(\rho) = C_1 J_1\left(\frac{R}{\ell_K} \rho\right) + C_2 Y_1\left(\frac{R}{\ell_K} \rho\right)
+\end{equation}
+
+Pour un cœur d'épaisseur négligeable ($\varepsilon \to 0$), la régularité à l'origine ($Y_1(0) \to -\infty$) impose $C_2 = 0$. Ainsi, la solution simplifiée s'écrit :
+\begin{equation}
+\omega(\rho) = C_1 J_1\left(\frac{R}{\ell_K} \rho\right)
+\end{equation}
+
+\section{Origine du facteur $1.8412$}
+
+La seconde condition aux limites s'applique à la dérivée en $\rho = 1$ :
+\begin{equation}
+\omega'(1) = 0 \implies C_1 \cdot \frac{R}{\ell_K} J_1'\left(\frac{R}{\ell_K}\right) = 0
+\end{equation}
+
+Pour avoir une solution non triviale ($\omega(\rho) \neq 0$), la valeur de $x = \frac{R}{\ell_K}$ doit correspondre à une racine de la dérivée de la fonction de Bessel d'ordre 1, notée $J_1'(x) = 0$.
+
+En utilisant la relation sur les dérivées des fonctions de Bessel :
+\begin{equation}
+J_1'(x) = J_0(x) - \frac{1}{x} J_1(x)
+\end{equation}
+la condition d'annulation $J_1'(x) = 0$ équivaut à résoudre :
+\begin{equation}
+J_0(x) = \frac{J_1(x)}{x}
+\end{equation}
+
+La première racine strictement positive de $J_1'(x) = 0$ est un résultat classique des fonctions spéciales  :
+\begin{equation}
+x_{c} \approx 1.84118378\dots \approx 1.8412
+\end{equation}
+
+Le rayon critique $R_c$ correspond au rayon minimal pour lequel une instabilité / configuration non nulle apparaît :
+\begin{equation}
+\frac{R_c}{\ell_K} = 1.8412 \implies R_c = 1.8412 \, \ell_K
+\end{equation}
+
+\textbf{Conclusion :} Le facteur $1.8412$ provient directement du premier zéro de la dérivée de la fonction de Bessel de premier ordre, $J_1'(x) = 0$, imposé par la condition à la limite $d\omega/d\rho = 0$ en $\rho = 1$.
+
+\end{document}
