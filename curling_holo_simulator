@@ -233,7 +233,7 @@ def simulate_curling():
     # --- Step A: Solution estimate and stability diagnostics ---
     if Ku != 0:
         l_K = np.sqrt(A / abs(Ku))
-        Rc = 1.8412 * l_K
+        Rc = 1.8412 * l_K # 1.8412 first positive root of J1'(x)
         print(f"Estimated critical radius R_c = {Rc*1e9:.2f} nm (current R = {R*1e9:.1f} nm)")
  
         if Ku > 0 or R < Rc:
