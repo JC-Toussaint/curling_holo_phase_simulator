@@ -29,7 +29,7 @@ The radial spatial domain is discretized using the dimensionless variable $\rho 
 ## 💻 Algorithmic Structure
 
 The simulation script is organized around 5 key steps:
-1. **Solving the Boundary Value Problem (BVP):** Determining the magnetization angle $\omega(\rho)$ using the `scipy.integrate.solve_bvp` algorithm.
+1. **Solving the Boundary Value Problem (BVP):** Determining the magnetization angle $\omega(\rho)$ using the `scipy.integrate.solve_bvp` algorithm. For $K_u < 0$, the initial guess $\omega_0(\rho) = \frac{\pi}{2}\tanh\big(\sqrt{2|\kappa|}\,\rho\big)$ varies on the physical length scale $\ell_K/R = 1/\sqrt{2|\kappa|}$, and the grid is refined quadratically near the core, so that the solver converges even for $|\kappa| \gg 1$. The solution is then checked: `solve_bvp` must have converged and $\omega(\rho)$ must be monotonically increasing, otherwise the simulation stops (see [Failure handling](#failure-handling)).
 2. **Magnetic Projection:** Computing the projection integral $I(y)$ along the electron beam's line of sight ($z$). The evaluation is vectorized via `np.vectorize` and computed by numerical quadrature (`scipy.integrate.quad`).
 3. **Phase Integration:** Computing the cumulative phase $\Phi(y)$ using the trapezoidal method over the interval $[-2R, 2R]$. The anti-symmetry of the phase is used, enforcing $\Phi(0) = 0$ at the center.
 5. **2D Image Generation & Metadata:** Duplicating the 1D profiles (phase and thickness) via `np.tile` to generate 2D matrices exploiting strict invariance along the perpendicular direction. Both maps are exported in 16-bit PNG format (`uint16`), embedding the physical metadata (`PngInfo`) needed for their future decoding.
@@ -69,6 +69,18 @@ To generate the phase and thickness maps of a cylinder with radius $R = 100\text
 ```bash
 ./curling_holo_simulator 1000 1e-9 --R 100e-9 --Ku=-1e5
 ```
+
+### Failure handling
+There is no fallback solver. If the BVP solution is not physically admissible, the script prints an error on `stderr`, recalls the value of $\kappa$, and exits with status `1` without producing any image. This happens in two cases:
+* `solve_bvp` did not converge, for example:
+  ```
+  [Euler-Lagrange / BVP] ERROR: solve_bvp did not converge (status 1: The maximum number of mesh nodes is exceeded.)
+  kappa = -533.3: no physically admissible curling profile was found.
+  ```
+* $\omega(\rho)$ is not monotonically increasing; the message then gives the minimum of $\mathrm{d}\omega/\mathrm{d}\rho$.
+
+On success, the script exits with status `0`. The exit status can therefore be checked in batch runs. On a sweep of 224 parameter sets ($|\kappa|$ from $2.5\times10^{-3}$ to $3.2\times10^{4}$), no failure occurred. See [`dev-notes/convergence_bvp_curling.tex`](dev-notes/convergence_bvp_curling.tex) for details.
+
 ---
 
 ## 🛠️ Dependencies
