@@ -38,3 +38,18 @@ html/
 # build directory
 build
 *:Zone.Identifier
+
+# LaTeX auxiliary files
+*.aux
+*.log
+*.toc
+*.lof
+*.lot
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+# .out is also used by simulation outputs: only ignore it next to LaTeX sources
+/dev-notes/*.out
+/latex/*.out
