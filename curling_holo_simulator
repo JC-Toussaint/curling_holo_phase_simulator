@@ -242,11 +242,15 @@ def simulate_curling():
             print(">>> Favorable configuration: Non-trivial curling profile expected.")
 
     # --- Step B: Solving the ODE (BVP) ---
-    rho_grid = np.linspace(epsilon, 1.0, N_BVP)
-    # Linear 'guess' profile to push the solver toward the non-trivial solution
+    # Grid refined near the core (quadratic spacing) to resolve the boundary
+    # layer of width ~ l_K/R = 1/sqrt(2|kappa|), which is very thin for large |kappa|
+    rho_grid = epsilon + (1.0 - epsilon) * np.linspace(0.0, 1.0, N_BVP)**2
+    # 'guess' profile to push the solver toward the non-trivial solution
     if Ku < 0:
-        # omega_guess = (np.pi / 2) * rho_grid 
-        omega_guess = (np.pi / 2) * np.tanh(rho_grid*(2-rho_grid))
+        # The guess must vary on the physical length scale l_K/R, otherwise
+        # solve_bvp diverges toward oscillating branches when |kappa| >> 1
+        k = np.sqrt(2 * abs(kappa))
+        omega_guess = (np.pi / 2) * np.tanh(k * rho_grid)
     else:
         omega_guess = 0 * rho_grid
     y_guess = np.vstack([omega_guess, np.gradient(omega_guess, rho_grid)])
