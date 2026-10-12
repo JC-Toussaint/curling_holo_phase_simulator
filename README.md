@@ -28,11 +28,11 @@ The radial spatial domain is discretized using the dimensionless variable $\rho 
 
 ## 💻 Algorithmic Structure
 
-The simulation script is organized around 5 key steps:
+The simulation script is organized around 4 key steps:
 1. **Solving the Boundary Value Problem (BVP):** Determining the magnetization angle $\omega(\rho)$ using the `scipy.integrate.solve_bvp` algorithm. For $K_u < 0$, the initial guess $\omega_0(\rho) = \frac{\pi}{2}\tanh\big(\sqrt{2|\kappa|}\,\rho\big)$ varies on the physical length scale $\ell_K/R = 1/\sqrt{2|\kappa|}$, and the grid is refined quadratically near the core, so that the solver converges even for $|\kappa| \gg 1$. The solution is then checked: `solve_bvp` must have converged and $\omega(\rho)$ must be monotonically increasing, otherwise the simulation stops (see [Failure handling](#failure-handling)).
 2. **Magnetic Projection:** Computing the projection integral $I(y)$ along the electron beam's line of sight ($z$). The evaluation is vectorized via `np.vectorize` and computed by numerical quadrature (`scipy.integrate.quad`).
 3. **Phase Integration:** Computing the cumulative phase $\Phi(y)$ using the trapezoidal method over the interval $[-2R, 2R]$. The anti-symmetry of the phase is used, enforcing $\Phi(0) = 0$ at the center.
-5. **2D Image Generation & Metadata:** Duplicating the 1D profiles (phase and thickness) via `np.tile` to generate 2D matrices exploiting strict invariance along the perpendicular direction. Both maps are exported in 16-bit PNG format (`uint16`), embedding the physical metadata (`PngInfo`) needed for their future decoding.
+4. **2D Image Generation & Metadata:** Duplicating the 1D profiles (phase and thickness) via `np.tile` to generate 2D matrices exploiting strict invariance along the perpendicular direction. Both maps are exported in 16-bit PNG format (`uint16`), embedding the physical metadata (`PngInfo`) needed for their future decoding.
 
 ---
 
