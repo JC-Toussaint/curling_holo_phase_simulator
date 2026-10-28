@@ -16,6 +16,7 @@ install_manifest.txt
 /Tests/**/*.png
 /Tests/**/*.msh
 /Tests/**/*.out
+/Tests/sol.in
 
 # Smoke test
 smoke-test.msh
