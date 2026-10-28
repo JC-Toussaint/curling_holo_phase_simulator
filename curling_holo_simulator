@@ -161,7 +161,7 @@ def simulate_curling():
     and computing the holographic phase.
     
     Returns:
-        tuple: (rho_grid, omega_bvp, y_vals, I_vals, phase_vals, thick_vals, contrast_vals)
+        tuple: (rho_grid, omega_bvp, y_vals, Mbeam_vals, phase_vals, thick_vals, contrast_vals)
     """
     # --- Step A: Solution estimate and stability diagnostics ---
     if Ku != 0:
@@ -228,9 +228,8 @@ def simulate_curling():
     phase_half = cumulative_trapezoid(I_half, y_half, initial=0)
     phase_half *= -e_c / hbar
 
-    # symmetrization (I(y) is even, Phi(y) is odd)
+    # symmetrization (Phi(y) is odd)
     idx = np.searchsorted(y_half, np.abs(y_vals))
-    I_vals = I_half[idx]
     phase_vals = np.sign(y_vals) * phase_half[idx]
 
     # Computing the thickness profile
@@ -252,7 +251,10 @@ def simulate_curling():
     I_minus = np.exp(-arg_minus)
     contrast_vals = (I_plus - I_minus) / (I_plus + I_minus)
 
-    return rho_grid, omega_bvp, y_vals, I_vals, phase_vals, thick_vals, contrast_vals
+    # Integral of the component of M along the beam (A): Ms * J(y), as Mz_integral in Diwina
+    Mbeam_vals = Ms * J_vals
+
+    return rho_grid, omega_bvp, y_vals, Mbeam_vals, phase_vals, thick_vals, contrast_vals
 
 
 def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals, show_plots=True):
@@ -306,10 +308,10 @@ def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals, show_plots=True):
     plt.show()
 
 
-def export_16bit_maps(I_vals, phase_vals, thick_vals, contrast_vals, show_plots=True):
+def export_16bit_maps(Mbeam_vals, phase_vals, thick_vals, contrast_vals, show_plots=True):
     """
     Generates, normalizes and exports the 2D grayscale 16-bit images
-    (Integral of Mz map, Phase map, Thickness map and STXM contrast map)
+    (Integral of the beam component of M map, Phase map, Thickness map and STXM contrast map)
     with their respective metadata.
     """
     # --- Retrieve the current date and time ---
@@ -318,50 +320,50 @@ def export_16bit_maps(I_vals, phase_vals, thick_vals, contrast_vals, show_plots=
     heure_creation = maintenant.strftime("%H:%M:%S")
 
     # -------------------------------------------------------------------------
-    # EXPORT INTEGRAL OF MZ MAP (16-BIT PNG) + METADATA
+    # EXPORT INTEGRAL OF MU_0*M ALONG THE BEAM MAP (16-BIT PNG) + METADATA
     # -------------------------------------------------------------------------
-    I_min, I_max = np.min(I_vals), np.max(I_vals)
-    print(f"[Image] I min: {I_min:.4e} | I max: {I_max:.4e}")
+    Mbeam_min, Mbeam_max = np.min(Mbeam_vals), np.max(Mbeam_vals)
+    print(f"[Image] Mbeam min: {Mbeam_min:.4e} | Mbeam max: {Mbeam_max:.4e}")
 
-    if I_max != I_min:
-        I_normalized = (I_vals - I_min) / (I_max - I_min) * 65535
+    if Mbeam_max != Mbeam_min:
+        Mbeam_normalized = (Mbeam_vals - Mbeam_min) / (Mbeam_max - Mbeam_min) * 65535
     else:
-        I_normalized = np.zeros_like(I_vals)
+        Mbeam_normalized = np.zeros_like(Mbeam_vals)
 
-    I_16bit = I_normalized.astype(np.uint16)
-    I_map_2d = np.tile(I_16bit, (IMAGE_SIZE, 1))
+    Mbeam_16bit = Mbeam_normalized.astype(np.uint16)
+    Mbeam_map_2d = np.tile(Mbeam_16bit, (IMAGE_SIZE, 1))
 
-    img_I = Image.fromarray(I_map_2d)
+    img_Mbeam = Image.fromarray(Mbeam_map_2d)
 
-    metadata_I = PngInfo()
-    metadata_I.add_text("Simulation_Type", "Curling Holo Phase Simulator - Integral of Mz Map")
-    metadata_I.add_text("Creation_Date", date_creation)
-    metadata_I.add_text("Creation_Time", heure_creation)
+    metadata_Mbeam = PngInfo()
+    metadata_Mbeam.add_text("Simulation_Type", "Curling Holo Phase Simulator - Integral of Mbeam Map")
+    metadata_Mbeam.add_text("Creation_Date", date_creation)
+    metadata_Mbeam.add_text("Creation_Time", heure_creation)
 
-    metadata_I.add_text("Param_A", str(A))
-    metadata_I.add_text("Param_Ku", str(Ku))
-    metadata_I.add_text("Param_Ms", str(Ms))
-    metadata_I.add_text("Param_R", str(R))
-    metadata_I.add_text("Param_r0", str(r0))
-    metadata_I.add_text("Param_kappa", str(kappa))
-    metadata_I.add_text("Param_IMAGE_SIZE", str(IMAGE_SIZE))
+    metadata_Mbeam.add_text("Param_A", str(A))
+    metadata_Mbeam.add_text("Param_Ku", str(Ku))
+    metadata_Mbeam.add_text("Param_Ms", str(Ms))
+    metadata_Mbeam.add_text("Param_R", str(R))
+    metadata_Mbeam.add_text("Param_r0", str(r0))
+    metadata_Mbeam.add_text("Param_kappa", str(kappa))
+    metadata_Mbeam.add_text("Param_IMAGE_SIZE", str(IMAGE_SIZE))
 
-    metadata_I.add_text("Subject Units", "meters")
-    metadata_I.add_text("Pixel Width",  str(PIXEL_SIZE))
-    metadata_I.add_text("Pixel Height", str(PIXEL_SIZE))
-    metadata_I.add_text("Pixel Unit", "m")
+    metadata_Mbeam.add_text("Subject Units", "meters")
+    metadata_Mbeam.add_text("Pixel Width",  str(PIXEL_SIZE))
+    metadata_Mbeam.add_text("Pixel Height", str(PIXEL_SIZE))
+    metadata_Mbeam.add_text("Pixel Unit", "m")
 
-    metadata_I.add_text("Value Min", str(I_min))
-    metadata_I.add_text("Value Max", str(I_max))
-    metadata_I.add_text("Value Unit", "T.m")
+    metadata_Mbeam.add_text("Value Min", str(Mbeam_min))
+    metadata_Mbeam.add_text("Value Max", str(Mbeam_max))
+    metadata_Mbeam.add_text("Value Unit", "A")
 
-    output_image_path_I = os.path.join(SCRIPT_DIR, 'analytics_MZ_INTEGRAL.png')
-    img_I.save(output_image_path_I, pnginfo=metadata_I)
+    output_image_path_Mbeam = os.path.join(SCRIPT_DIR, 'analytics_MBEAM_INTEGRAL.png')
+    img_Mbeam.save(output_image_path_Mbeam, pnginfo=metadata_Mbeam)
 
-    print(f"{GREEN}[Sucess]{RESET} 16-bit image (with metadata) saved to:\n -> {output_image_path_I}")
+    print(f"{GREEN}[Sucess]{RESET} 16-bit image (with metadata) saved to:\n -> {output_image_path_Mbeam}")
 
     if show_plots:
-        plt.imshow(img_I, cmap="gray")
+        plt.imshow(img_Mbeam, cmap="gray")
         plt.show()
 
     # -------------------------------------------------------------------------
@@ -513,14 +515,14 @@ def export_16bit_maps(I_vals, phase_vals, thick_vals, contrast_vals, show_plots=
         plt.show()
 
 
-def export_profiles(y_vals, I_vals, phase_vals, thick_vals, contrast_vals):
+def export_profiles(y_vals, Mbeam_vals, phase_vals, thick_vals, contrast_vals):
     """
-    Saves the profiles along Ox (Integral of Mz, holographic phase, path length and STXM contrast)
+    Saves the profiles along Ox (Integral of M along the beam, holographic phase, path length and STXM contrast)
     as CSV files, with the x coordinate in nm.
     """
     x_nm = y_vals * 1e9
     profiles = [
-        ('profile_MZ_INTEGRAL.csv', 'I (T.m)',          I_vals),
+        ('profile_MBEAM_INTEGRAL.csv', 'Mbeam (A)',     Mbeam_vals),
         ('profile_HOLO_PHASE.csv',  'Phase (rad)',      phase_vals),
         ('profile_PATH_LENGTH.csv', 'Path length (m)',  thick_vals),
         ('profile_STXM_XMCD.csv',   'Contrast (dimless)', contrast_vals),
@@ -581,7 +583,7 @@ if __name__ == "__main__":
 
     # 2. Launching the physical computations
     t_sim_start = time.perf_counter()
-    rho_grid, omega_bvp, y_vals, I_vals, phase_vals, thick_vals, contrast_vals = simulate_curling()
+    rho_grid, omega_bvp, y_vals, Mbeam_vals, phase_vals, thick_vals, contrast_vals = simulate_curling()
     t_sim = time.perf_counter() - t_sim_start
 
     # 3. Control plots
@@ -591,8 +593,8 @@ if __name__ == "__main__":
 
     # 4. Normalization and export to 16-bit PNG format with metadata, and profiles along Ox
     t_export_start = time.perf_counter()
-    export_16bit_maps(I_vals, phase_vals, thick_vals, contrast_vals, show_plots=show_plots)
-    export_profiles(y_vals, I_vals, phase_vals, thick_vals, contrast_vals)
+    export_16bit_maps(Mbeam_vals, phase_vals, thick_vals, contrast_vals, show_plots=show_plots)
+    export_profiles(y_vals, Mbeam_vals, phase_vals, thick_vals, contrast_vals)
     t_export = time.perf_counter() - t_export_start
 
     t_total = time.perf_counter() - t_start_global
