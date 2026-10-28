@@ -36,17 +36,19 @@ Soumise aux conditions aux limites (CL) :
 \end{equation}
 Cette équation est résolue numériquement à l'aide de l'algorithme \texttt{solve\_bvp} qui génère une approximation continue sous forme de spline.
 
-\section{Projection Magnétique et Intégrale $I(y)$}
-Le faisceau d'électrons se propage le long de l'axe $z$. Pour chaque coordonnée d'impact transverse $y \in [-R, R]$, le déphasage dépend de la projection de l'aimantation intégrée le long de la ligne de visée $z$.
+\paragraph{Convention d'axes.} L'axe du fil est $Oz$ et l'aimantation s'écrit $\mathbf{m} = \sin\omega\,\mathbf{e}_\varphi + \cos\omega\,\mathbf{e}_z$, de sorte que $m_z = \cos\omega$ est la composante axiale. Le faisceau se propage selon $s$, perpendiculairement au fil ; $y$ est la coordonnée transverse dans l'image, et $(y, s, z)$ forme un repère direct. Un point de la section droite est repéré par $(y, s)$, à la distance $r = \sqrt{y^2 + s^2}$ de l'axe, et $\mathbf{e}_\varphi = \mathbf{e}_z \times \mathbf{e}_r$.
 
-La limite géométrique d'intégration le long du cylindre est donnée par :
+\section{Projection Magnétique et Intégrale $I(y)$}
+Le faisceau d'électrons se propage selon $s$, perpendiculairement à l'axe $Oz$ du fil. Pour chaque coordonnée d'impact transverse $y \in [-R, R]$, le déphasage dépend de la composante axiale de l'aimantation, $m_z = \cos\omega$, intégrée le long de la ligne de visée $s$.
+
+La ligne de visée traverse la section droite du fil sur la corde $s \in [-s_{\text{max}}(y), s_{\text{max}}(y)]$, avec :
 \begin{equation}
-    z_{\text{max}}(y) = \sqrt{R^2 - y^2}
+    s_{\text{max}}(y) = \sqrt{R^2 - y^2}
 \end{equation}
 
-Pour un point $(y, z)$ donné, la position radiale locale est $r = \sqrt{y^2 + z^2}$, soit $\rho = \frac{\sqrt{y^2 + z^2}}{R}$. L'intégrale de projection $I(y)$ s'exprime alors par :
+Pour un point $(y, s)$ donné, la position radiale locale est $r = \sqrt{y^2 + s^2}$, soit $\rho = \frac{\sqrt{y^2 + s^2}}{R}$. L'intégrale de projection $I(y)$ s'exprime alors par :
 \begin{equation}
-    I(y) = -\mu_0 M_s \int_{-z_{\text{max}}(y)}^{z_{\text{max}}(y)} \cos\big(\omega(\rho)\big) \, \mathrm{d}z
+    I(y) = -\mu_0 M_s \int_{-s_{\text{max}}(y)}^{s_{\text{max}}(y)} \cos\big(\omega(\rho)\big) \, \mathrm{d}s
 \end{equation}
 
 Dans le code, l'évaluation de cette expression est vectorisée sur tout le profil transverse $y$ via l'opérateur \texttt{np.vectorize} couplé à une quadrature numérique (\texttt{scipy.integrate.quad}).
@@ -70,7 +72,7 @@ Enfin, en intégrant les constantes physiques fondamentales (la charge élément
 \end{equation}
 
 \section{Génération de la Carte de Phase 2D}
-L'image finale de la carte de phase présente une invariance stricte selon l'axe longitudinal $z$. L'image discrète à deux dimensions $M(j, i)$ de taille $N \times N$ est générée en dupliquant le profil unidimensionnel normalisé sur chaque ligne (opérateur \texttt{np.tile}) :
+L'image finale de la carte de phase présente une invariance stricte selon l'axe du fil $Oz$, qui correspond à la direction verticale de l'image. L'image discrète à deux dimensions $M(j, i)$ de taille $N \times N$ est générée en dupliquant le profil unidimensionnel normalisé sur chaque ligne (opérateur \texttt{np.tile}) :
 \begin{equation}
     M(j, i) = \text{round}\left( 65535 \times \frac{\Phi(y_i) - \Phi_{\text{min}}}{\Phi_{\text{max}} - \Phi_{\text{min}}} \right)
 \end{equation}
