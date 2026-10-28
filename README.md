@@ -2,7 +2,7 @@
 
 This project implements the numerical simulation of the magnetization distribution in a ferromagnetic cylinder (curling mode). Starting from this micromagnetic configuration, the software suite computes the impact of the magnetic field on the phase of an electron beam via **electron holography**.
 
-All results are exported as 2D images in 16-bit PNG format, including detailed physical metadata.
+All results are exported as 2D images in 16-bit PNG format, including detailed physical metadata, and as 1D profiles in CSV format (see [Output files](#output-files)).
 
 ## 📋 Table of Contents
 - [Physics and Parameters](#-physics-and-parameters)
@@ -68,6 +68,19 @@ To generate the phase and thickness maps of a cylinder with radius $R = 100\text
 
 ```bash
 ./curling_holo_simulator 1000 1e-9 --R 100e-9 --Ku=-1e5
+```
+
+### Output files
+The files are written next to the script:
+* `analytics_MZ_INTEGRAL.png`, `analytics_HOLO_PHASE.png`, `analytics_PATH_LENGTH.png`: 16-bit maps of $I(y)$, $\Phi(y)$ and the thickness, with their metadata;
+* `profile_MZ_INTEGRAL.csv`, `profile_HOLO_PHASE.csv`, `profile_PATH_LENGTH.csv`: the corresponding profiles along Ox (comma-separated, one header line, $x$ in nm).
+
+The CSV profiles can be plotted directly with gnuplot:
+
+```gnuplot
+set datafile separator comma
+set key autotitle columnhead      # the first line becomes the curve title
+plot 'profile_HOLO_PHASE.csv' using 1:2 with lines
 ```
 
 ### Failure handling
