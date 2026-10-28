@@ -107,6 +107,8 @@ def configure_arguments():
     parser.add_argument('--Ku', type=float, default = -1e4, help="Uniaxial anisotropy constant (J/m^3)")
     parser.add_argument('--Ms', type=float, default = 1.00531 / mu_0, help="Magnetization (A/m)")
     parser.add_argument('--R',  type=float, default = 100e-9, help="Outer radius of the cylinder (m)")
+    parser.add_argument('--lbp', type=float, default = 0.01, help="STXM absorption coefficient for sigma=+1 (1/nm)")
+    parser.add_argument('--lbm', type=float, default = 0.018, help="STXM absorption coefficient for sigma=-1 (1/nm)")
     
     # New options to disable figure displaying/generation
     parser.add_argument('--no-plots', '--nograph', action='store_true', dest='no_plots',
@@ -126,7 +128,7 @@ def simulate_curling():
     and computing the holographic phase.
     
     Returns:
-        tuple: (rho_grid, omega_bvp, y_vals, I_vals, phase_vals, thick_vals)
+        tuple: (rho_grid, omega_bvp, y_vals, I_vals, phase_vals, thick_vals, contrast_vals)
     """
     # --- Step A: Solution estimate and stability diagnostics ---
     if Ku != 0:
@@ -201,7 +203,19 @@ def simulate_curling():
     # Computing the thickness profile
     thick_vals = 2 * np.sqrt(np.maximum(0, R**2 - y_vals**2))
 
-    return rho_grid, omega_bvp, y_vals, I_vals, phase_vals, thick_vals
+    # --- Step E: Computing the STXM (XMCD) contrast ---
+    # The absorption coefficient depends on m_z: 0.5*(lbp + lbm + sigma*(lbp - lbm)*m_z)
+    # Integral of m_z along the beam (m), recovered from I(y) = -mu_0 * Ms * int m_z dz
+    mz_path = -I_vals / (mu_0 * Ms)
+    # lbp and lbm are given in 1/nm, lengths in m
+    inm = 1e9
+    arg_plus  = 0.5 * inm * ((lbp + lbm) * thick_vals + (lbp - lbm) * mz_path)  # sigma=+1
+    arg_minus = 0.5 * inm * ((lbp + lbm) * thick_vals - (lbp - lbm) * mz_path)  # sigma=-1
+    I_plus  = np.exp(-arg_plus)
+    I_minus = np.exp(-arg_minus)
+    contrast_vals = (I_plus - I_minus) / (I_plus + I_minus)
+
+    return rho_grid, omega_bvp, y_vals, I_vals, phase_vals, thick_vals, contrast_vals
 
 
 def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals, show_plots=True):
@@ -255,10 +269,11 @@ def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals, show_plots=True):
     plt.show()
 
 
-def export_16bit_maps(I_vals, phase_vals, thick_vals, show_plots=True):
+def export_16bit_maps(I_vals, phase_vals, thick_vals, contrast_vals, show_plots=True):
     """
     Generates, normalizes and exports the 2D grayscale 16-bit images
-    (Integral of Mz map, Phase map and Thickness map) with their respective metadata.
+    (Integral of Mz map, Phase map, Thickness map and STXM contrast map)
+    with their respective metadata.
     """
     # --- Retrieve the current date and time ---
     maintenant = datetime.now()
@@ -411,10 +426,59 @@ def export_16bit_maps(I_vals, phase_vals, thick_vals, show_plots=True):
         plt.imshow(img_thick, cmap="gray")
         plt.show()
 
+    # -------------------------------------------------------------------------
+    # EXPORT STXM CONTRAST MAP (16-BIT PNG) + METADATA
+    # -------------------------------------------------------------------------
+    contrast_min, contrast_max = np.min(contrast_vals), np.max(contrast_vals)
+    print(f"[Image] Contrast min: {contrast_min:.4e} | Contrast max: {contrast_max:.4e}")
 
-def export_profiles(y_vals, I_vals, phase_vals, thick_vals):
+    if contrast_max != contrast_min:
+        contrast_normalized = (contrast_vals - contrast_min) / (contrast_max - contrast_min) * 65535
+    else:
+        contrast_normalized = np.zeros_like(contrast_vals)
+
+    contrast_16bit = contrast_normalized.astype(np.uint16)
+    contrast_map_2d = np.tile(contrast_16bit, (IMAGE_SIZE, 1))
+
+    img_contrast = Image.fromarray(contrast_map_2d)
+
+    metadata_contrast = PngInfo()
+    metadata_contrast.add_text("Simulation_Type", "Curling Holo Phase Simulator - STXM Contrast Map")
+    metadata_contrast.add_text("Creation_Date", date_creation)
+    metadata_contrast.add_text("Creation_Time", heure_creation)
+
+    metadata_contrast.add_text("Param_A", str(A))
+    metadata_contrast.add_text("Param_Ku", str(Ku))
+    metadata_contrast.add_text("Param_Ms", str(Ms))
+    metadata_contrast.add_text("Param_R", str(R))
+    metadata_contrast.add_text("Param_r0", str(r0))
+    metadata_contrast.add_text("Param_kappa", str(kappa))
+    metadata_contrast.add_text("Param_lbp", str(lbp))
+    metadata_contrast.add_text("Param_lbm", str(lbm))
+    metadata_contrast.add_text("Param_IMAGE_SIZE", str(IMAGE_SIZE))
+
+    metadata_contrast.add_text("Subject Units", "meters")
+    metadata_contrast.add_text("Pixel Width",  str(PIXEL_SIZE))
+    metadata_contrast.add_text("Pixel Height", str(PIXEL_SIZE))
+    metadata_contrast.add_text("Pixel Unit", "m")
+
+    metadata_contrast.add_text("Value Min", str(contrast_min))
+    metadata_contrast.add_text("Value Max", str(contrast_max))
+    metadata_contrast.add_text("Value Unit", "dimless")
+
+    output_image_path_contrast = os.path.join(SCRIPT_DIR, 'analytics_STXM_XMCD.png')
+    img_contrast.save(output_image_path_contrast, pnginfo=metadata_contrast)
+
+    print(f"{GREEN}[Sucess]{RESET} 16-bit image (with metadata) saved to:\n -> {output_image_path_contrast}")
+
+    if show_plots:
+        plt.imshow(img_contrast, cmap="gray")
+        plt.show()
+
+
+def export_profiles(y_vals, I_vals, phase_vals, thick_vals, contrast_vals):
     """
-    Saves the profiles along Ox (Integral of Mz, holographic phase and path length)
+    Saves the profiles along Ox (Integral of Mz, holographic phase, path length and STXM contrast)
     as CSV files, with the x coordinate in nm.
     """
     x_nm = y_vals * 1e9
@@ -422,6 +486,7 @@ def export_profiles(y_vals, I_vals, phase_vals, thick_vals):
         ('profile_MZ_INTEGRAL.csv', 'I (T.m)',          I_vals),
         ('profile_HOLO_PHASE.csv',  'Phase (rad)',      phase_vals),
         ('profile_PATH_LENGTH.csv', 'Path length (m)',  thick_vals),
+        ('profile_STXM_XMCD.csv',   'Contrast (dimless)', contrast_vals),
     ]
     for filename, label, values in profiles:
         output_path = os.path.join(SCRIPT_DIR, filename)
@@ -440,7 +505,7 @@ if __name__ == "__main__":
     args = configure_arguments()
 
     # --- Make the variables global for the script's functions ---
-    global A, Ku, Ms, R, kappa, epsilon, r0, IMAGE_SIZE, PIXEL_SIZE
+    global A, Ku, Ms, R, kappa, epsilon, r0, IMAGE_SIZE, PIXEL_SIZE, lbp, lbm
 
     # Retrieving positional and optional arguments
     IMAGE_SIZE = args.IMAGE_SIZE
@@ -449,6 +514,8 @@ if __name__ == "__main__":
     Ku = args.Ku        # Uniaxial anisotropy constant (J/m^3)
     Ms = args.Ms        # Magnetization (A/m)
     R = args.R          # Outer radius in m
+    lbp = args.lbp      # STXM absorption coefficient, sigma=+1 (1/nm)
+    lbm = args.lbm      # STXM absorption coefficient, sigma=-1 (1/nm)
 
     show_plots = not args.no_plots
 
@@ -466,6 +533,8 @@ if __name__ == "__main__":
     print(f" -> Ku : {Ku:.2e} J/m^3")
     print(f" -> Ms : {Ms:.2e} A/m")
     print(f" -> R  : {R:.2e} m")
+    print(f" -> lbp : {lbp:.4g} 1/nm")
+    print(f" -> lbm : {lbm:.4g} 1/nm")
     print(f" -> kappa (computed)  : {kappa:.4f}")
     print(f" -> Display Plots : {show_plots}\n")
     print("="*50 + "\n")
@@ -475,7 +544,7 @@ if __name__ == "__main__":
 
     # 2. Launching the physical computations
     t_sim_start = time.perf_counter()
-    rho_grid, omega_bvp, y_vals, I_vals, phase_vals, thick_vals = simulate_curling()
+    rho_grid, omega_bvp, y_vals, I_vals, phase_vals, thick_vals, contrast_vals = simulate_curling()
     t_sim = time.perf_counter() - t_sim_start
 
     # 3. Control plots
@@ -485,8 +554,8 @@ if __name__ == "__main__":
 
     # 4. Normalization and export to 16-bit PNG format with metadata, and profiles along Ox
     t_export_start = time.perf_counter()
-    export_16bit_maps(I_vals, phase_vals, thick_vals, show_plots=show_plots)
-    export_profiles(y_vals, I_vals, phase_vals, thick_vals)
+    export_16bit_maps(I_vals, phase_vals, thick_vals, contrast_vals, show_plots=show_plots)
+    export_profiles(y_vals, I_vals, phase_vals, thick_vals, contrast_vals)
     t_export = time.perf_counter() - t_export_start
 
     t_total = time.perf_counter() - t_start_global
