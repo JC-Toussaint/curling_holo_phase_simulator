@@ -72,8 +72,11 @@ To generate the phase and thickness maps of a cylinder with radius $R = 100\text
 
 ### Output files
 The files are written next to the script:
-* `analytics_MZ_INTEGRAL.png`, `analytics_HOLO_PHASE.png`, `analytics_PATH_LENGTH.png`: 16-bit maps of $I(y)$, $\Phi(y)$ and the thickness, with their metadata;
-* `profile_MZ_INTEGRAL.csv`, `profile_HOLO_PHASE.csv`, `profile_PATH_LENGTH.csv`: the corresponding profiles along Ox (comma-separated, one header line, $x$ in nm).
+* `analytics_MZ_INTEGRAL.png`, `analytics_HOLO_PHASE.png`, `analytics_PATH_LENGTH.png`, `analytics_STXM_XMCD.png`: 16-bit maps of $I(y)$, $\Phi(y)$, the thickness and the STXM contrast, with their metadata;
+* `profile_MZ_INTEGRAL.csv`, `profile_HOLO_PHASE.csv`, `profile_PATH_LENGTH.csv`, `profile_STXM_XMCD.csv`: the corresponding profiles along Ox (comma-separated, one header line, $x$ in nm).
+
+The STXM (XMCD) contrast uses the absorption coefficients $\lambda_+$ (`--lbp`, default $0.01\text{ nm}^{-1}$) and $\lambda_-$ (`--lbm`, default $0.018\text{ nm}^{-1}$). For the helicity $\sigma = \pm 1$, the absorption coefficient is $\frac{1}{2}\left(\lambda_+ + \lambda_- + \sigma(\lambda_+ - \lambda_-)\,m_z\right)$, which gives, with the path length $t(y)$ and $\int m_z\,\mathrm{d}z = -I(y)/(\mu_0 M_s)$:
+$$a_\sigma(y) = \frac{1}{2}\left[(\lambda_+ + \lambda_-)\,t(y) + \sigma(\lambda_+ - \lambda_-)\int m_z\,\mathrm{d}z\right], \qquad C(y) = \frac{e^{-a_+(y)} - e^{-a_-(y)}}{e^{-a_+(y)} + e^{-a_-(y)}}$$
 
 The CSV profiles can be plotted directly with gnuplot:
 
