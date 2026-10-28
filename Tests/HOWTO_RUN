@@ -18,7 +18,7 @@ fmit-calculator settings.yml
 fmit-fresnel sim_HOLO_PHASE.png sim_PATH_LENGTH.png
 
 # Reference computed with curling_holo_simulator (infinite wire), same parameters
-# (outputs analytics_*.png and profile_*.csv are written next to the script, in ..)
+# (outputs analytics_*.png and profile_*.csv are written in the current directory)
 ../curling_holo_simulator 1001 1e-9 --R 100e-9 --A 1.3e-11 --Ku=-1e5 --no-plots
 
 # Comparison: profiles of sim_PATH_LENGTH.png, sim_MZ.png and sim_STXM_XMCD.png across
