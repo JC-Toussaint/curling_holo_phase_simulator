@@ -126,7 +126,7 @@ def simulate_curling():
     and computing the holographic phase.
     
     Returns:
-        tuple: (rho_grid, omega_bvp, y_vals, phase_vals, thick_vals)
+        tuple: (rho_grid, omega_bvp, y_vals, I_vals, phase_vals, thick_vals)
     """
     # --- Step A: Solution estimate and stability diagnostics ---
     if Ku != 0:
@@ -181,25 +181,27 @@ def simulate_curling():
     # Vectorization of the function for optimized execution over a NumPy array
     compute_I_vectorized = np.vectorize(lambda y: compute_I(y, R, sol.sol))
     
-    # Direct generation of the fine mesh (avoids computing twice with different grid sizes)
-    bound = IMAGE_SIZE * PIXEL_SIZE / 2
-    y_vals = np.linspace(0, bound, IMAGE_SIZE // 2 + 1)
-    print(f"[Computation] Evaluating I(y) over {IMAGE_SIZE} points...")
-    I_vals = compute_I_vectorized(y_vals)
+    # Pixel-centered grid: exactly IMAGE_SIZE points, symmetric with respect to y = 0
+    y_vals = (np.arange(IMAGE_SIZE) - (IMAGE_SIZE - 1) / 2) * PIXEL_SIZE
+    # Half grid y >= 0 (y = 0 included so that the phase integration starts at 0)
+    y_half = np.unique(np.concatenate(([0.0], np.abs(y_vals))))
+    print(f"[Computation] Evaluating I(y) over {y_half.size} points...")
+    I_half = compute_I_vectorized(y_half)
 
     # --- Step D: Computing the phase Phi(y) ---
     # Integration using the trapezoidal method
-    phase_vals = cumulative_trapezoid(I_vals, y_vals, initial=0)
-    phase_vals *= -e_c / hbar
+    phase_half = cumulative_trapezoid(I_half, y_half, initial=0)
+    phase_half *= -e_c / hbar
 
-    # anti-symmetrization
-    y_vals = np.concatenate((-y_vals[:1:-1], y_vals))
-    phase_vals = np.concatenate((-phase_vals[:1:-1], phase_vals))
+    # symmetrization (I(y) is even, Phi(y) is odd)
+    idx = np.searchsorted(y_half, np.abs(y_vals))
+    I_vals = I_half[idx]
+    phase_vals = np.sign(y_vals) * phase_half[idx]
 
     # Computing the thickness profile
     thick_vals = 2 * np.sqrt(np.maximum(0, R**2 - y_vals**2))
 
-    return rho_grid, omega_bvp, y_vals, phase_vals, thick_vals
+    return rho_grid, omega_bvp, y_vals, I_vals, phase_vals, thick_vals
 
 
 def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals, show_plots=True):
@@ -253,15 +255,62 @@ def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals, show_plots=True):
     plt.show()
 
 
-def export_16bit_maps(phase_vals, thick_vals, show_plots=True):
+def export_16bit_maps(I_vals, phase_vals, thick_vals, show_plots=True):
     """
     Generates, normalizes and exports the 2D grayscale 16-bit images
-    (Phase map and Thickness map) with their respective metadata.
+    (Integral of Mz map, Phase map and Thickness map) with their respective metadata.
     """
     # --- Retrieve the current date and time ---
     maintenant = datetime.now()
     date_creation = maintenant.strftime("%Y-%m-%d")
     heure_creation = maintenant.strftime("%H:%M:%S")
+
+    # -------------------------------------------------------------------------
+    # EXPORT INTEGRAL OF MZ MAP (16-BIT PNG) + METADATA
+    # -------------------------------------------------------------------------
+    I_min, I_max = np.min(I_vals), np.max(I_vals)
+    print(f"[Image] I min: {I_min:.4e} | I max: {I_max:.4e}")
+
+    if I_max != I_min:
+        I_normalized = (I_vals - I_min) / (I_max - I_min) * 65535
+    else:
+        I_normalized = np.zeros_like(I_vals)
+
+    I_16bit = I_normalized.astype(np.uint16)
+    I_map_2d = np.tile(I_16bit, (IMAGE_SIZE, 1))
+
+    img_I = Image.fromarray(I_map_2d)
+
+    metadata_I = PngInfo()
+    metadata_I.add_text("Simulation_Type", "Curling Holo Phase Simulator - Integral of Mz Map")
+    metadata_I.add_text("Creation_Date", date_creation)
+    metadata_I.add_text("Creation_Time", heure_creation)
+
+    metadata_I.add_text("Param_A", str(A))
+    metadata_I.add_text("Param_Ku", str(Ku))
+    metadata_I.add_text("Param_Ms", str(Ms))
+    metadata_I.add_text("Param_R", str(R))
+    metadata_I.add_text("Param_r0", str(r0))
+    metadata_I.add_text("Param_kappa", str(kappa))
+    metadata_I.add_text("Param_IMAGE_SIZE", str(IMAGE_SIZE))
+
+    metadata_I.add_text("Subject Units", "meters")
+    metadata_I.add_text("Pixel Width",  str(PIXEL_SIZE))
+    metadata_I.add_text("Pixel Height", str(PIXEL_SIZE))
+    metadata_I.add_text("Pixel Unit", "m")
+
+    metadata_I.add_text("Value Min", str(I_min))
+    metadata_I.add_text("Value Max", str(I_max))
+    metadata_I.add_text("Value Unit", "T.m")
+
+    output_image_path_I = os.path.join(SCRIPT_DIR, 'analytics_MZ_INTEGRAL.png')
+    img_I.save(output_image_path_I, pnginfo=metadata_I)
+
+    print(f"{GREEN}[Sucess]{RESET} 16-bit image (with metadata) saved to:\n -> {output_image_path_I}")
+
+    if show_plots:
+        plt.imshow(img_I, cmap="gray")
+        plt.show()
 
     # -------------------------------------------------------------------------
     # EXPORT HOLOGRAPHIC PHASE MAP (16-BIT PNG) + METADATA
@@ -363,6 +412,24 @@ def export_16bit_maps(phase_vals, thick_vals, show_plots=True):
         plt.show()
 
 
+def export_profiles(y_vals, I_vals, phase_vals, thick_vals):
+    """
+    Saves the profiles along Ox (Integral of Mz, holographic phase and path length)
+    as CSV files, with the x coordinate in nm.
+    """
+    x_nm = y_vals * 1e9
+    profiles = [
+        ('profile_MZ_INTEGRAL.csv', 'I (T.m)',          I_vals),
+        ('profile_HOLO_PHASE.csv',  'Phase (rad)',      phase_vals),
+        ('profile_PATH_LENGTH.csv', 'Path length (m)',  thick_vals),
+    ]
+    for filename, label, values in profiles:
+        output_path = os.path.join(SCRIPT_DIR, filename)
+        np.savetxt(output_path, np.column_stack((x_nm, values)), delimiter=',',
+                   header=f"x (nm),{label}", comments='')
+        print(f"{GREEN}[Sucess]{RESET} Profile saved to:\n -> {output_path}")
+
+
 # =============================================================================
 # 5. MAIN EXECUTION
 # =============================================================================
@@ -408,7 +475,7 @@ if __name__ == "__main__":
 
     # 2. Launching the physical computations
     t_sim_start = time.perf_counter()
-    rho_grid, omega_bvp, y_vals, phase_vals, thick_vals = simulate_curling()
+    rho_grid, omega_bvp, y_vals, I_vals, phase_vals, thick_vals = simulate_curling()
     t_sim = time.perf_counter() - t_sim_start
 
     # 3. Control plots
@@ -416,9 +483,10 @@ if __name__ == "__main__":
     generate_plots(rho_grid, omega_bvp, y_vals, phase_vals, show_plots=show_plots)
     t_plot = time.perf_counter() - t_plot_start
 
-    # 4. Normalization and export to 16-bit PNG format with metadata
+    # 4. Normalization and export to 16-bit PNG format with metadata, and profiles along Ox
     t_export_start = time.perf_counter()
-    export_16bit_maps(phase_vals, thick_vals, show_plots=show_plots)
+    export_16bit_maps(I_vals, phase_vals, thick_vals, show_plots=show_plots)
+    export_profiles(y_vals, I_vals, phase_vals, thick_vals)
     t_export = time.perf_counter() - t_export_start
 
     t_total = time.perf_counter() - t_start_global
@@ -428,7 +496,7 @@ if __name__ == "__main__":
     print("TIMING BENCHMARK / BILAN TEMPS DE CALCUL:")
     print(f" -> Simulation & Numerical Solving : {t_sim:.4f} s")
     print(f" -> Control Plots Generation       : {t_plot:.4f} s")
-    print(f" -> 16-bit Maps Export (PNG)       : {t_export:.4f} s")
+    print(f" -> 16-bit Maps & Profiles Export  : {t_export:.4f} s")
     print("-" * 50)
     print(f" -> TOTAL EXECUTION TIME           : {t_total:.4f} s")
     print("="*50 + "\n")
