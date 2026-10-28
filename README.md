@@ -50,7 +50,7 @@ $$\omega(\epsilon) = 0 \quad \text{and} \quad \omega'(1) = 0$$
 ### 2. Projection Integral $I(y)$
 For each abscissa $y \in [0, R]$, integrating along the geometric line of sight $s \in [-s_{\text{max}}(y), s_{\text{max}}(y)]$, with $s_{\text{max}}(y) = \sqrt{R^2 - y^2}$, gives:
 $$I(y) = -\mu_0 M_s \int_{-s_{\text{max}}(y)}^{s_{\text{max}}(y)} \cos\big(\omega(\rho)\big) \, \mathrm{d}s$$
-where the local radial position is $\rho = \frac{\sqrt{y^2 + s^2}}{R}$. $I(y)$ is the integral of the axial component $m_z$ along the beam.
+where the local radial position is $\rho = \frac{\sqrt{y^2 + s^2}}{R}$. $I(y)$ is the integral of the axial component $m_z$ along the beam; it is only used to compute the phase.
 
 ### 3. Computing the Holographic Phase $\Phi(y)$
 By incorporating the fundamental constants from `scipy.constants` (elementary charge $e$ and reduced Planck constant $\hbar$) and enforcing $\Phi(0) = 0$, the final phase is:
@@ -74,8 +74,10 @@ To generate the phase and thickness maps of a cylinder with radius $R = 100\text
 
 ### Output files
 The files are written next to the script:
-* `analytics_MZ_INTEGRAL.png`, `analytics_HOLO_PHASE.png`, `analytics_PATH_LENGTH.png`, `analytics_STXM_XMCD.png`: 16-bit maps of $I(y)$, $\Phi(y)$, the thickness and the STXM contrast, with their metadata;
-* `profile_MZ_INTEGRAL.csv`, `profile_HOLO_PHASE.csv`, `profile_PATH_LENGTH.csv`, `profile_STXM_XMCD.csv`: the corresponding profiles along Ox (comma-separated, one header line, $x$ in nm).
+* `analytics_MBEAM_INTEGRAL.png`, `analytics_HOLO_PHASE.png`, `analytics_PATH_LENGTH.png`, `analytics_STXM_XMCD.png`: 16-bit maps of $M_{\text{beam}}(y)$, $\Phi(y)$, the thickness and the STXM contrast, with their metadata;
+* `profile_MBEAM_INTEGRAL.csv`, `profile_HOLO_PHASE.csv`, `profile_PATH_LENGTH.csv`, `profile_STXM_XMCD.csv`: the corresponding profiles along Ox (comma-separated, one header line, $x$ in nm).
+
+$M_{\text{beam}}(y)$ is the integral, along the beam, of the component of $\mu_0\mathbf{M}$ along the beam (in T·m), $M_{\text{beam}}(y) = \mu_0 M_s\,J(y)$, with $J(y)$ defined below. It is odd in $y$.
 
 The STXM (XMCD) contrast uses the absorption coefficients $\lambda_+$ (`--lbp`, default $0.01\text{ nm}^{-1}$) and $\lambda_-$ (`--lbm`, default $0.018\text{ nm}^{-1}$). For the helicity $\sigma = \pm 1$, the absorption coefficient depends on the component of the magnetization along the beam, $\mathbf{m}\cdot\mathbf{e}_s = \sin\omega\,\frac{y}{r}$ (only the azimuthal part contributes, since the beam is perpendicular to the wire): $\frac{1}{2}\left(\lambda_+ + \lambda_- + \sigma(\lambda_+ - \lambda_-)\,\mathbf{m}\cdot\mathbf{e}_s\right)$. With the path length $t(y)$ and
 $$J(y) = \int_{-s_{\text{max}}(y)}^{s_{\text{max}}(y)} \sin\big(\omega(\rho)\big)\,\frac{y}{\sqrt{y^2 + s^2}}\,\mathrm{d}s,$$
