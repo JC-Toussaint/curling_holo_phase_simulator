@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+
+"""
+Compares the maps computed by Diwina (fmit-calculator) with the profiles along Ox
+computed by curling_holo_simulator:
+
+    sim_PATH_LENGTH.png  <->  profile_PATH_LENGTH.csv
+    sim_MZ.png           <->  profile_MBEAM_INTEGRAL.csv
+    sim_STXM_XMCD.png    <->  profile_STXM_XMCD.csv
+
+The wire is assumed vertical in the Diwina maps. The Diwina profile is the mean of
+the central rows (away from the ends of the wire). The deviation is computed inside
+the wire, relative to the maximum of |profile|.
+"""
+
+import numpy as np
+from PIL import Image
+
+import sys
+import os
+import argparse
+
+# Codes de couleur ANSI
+GREEN = "\033[92m"
+RED = "\033[91m"
+RESET = "\033[0m"
+
+PAIRS = [
+    ('PATH_LENGTH', 'PATH_LENGTH',    'm'),
+    ('MZ',          'MBEAM_INTEGRAL', 'A'),
+    ('STXM_XMCD',   'STXM_XMCD',      'dimless'),
+]
+
+
+def configure_arguments():
+    """Configures the command-line argument parser."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--diwina-dir', default=script_dir,
+                        help="Directory of the Diwina maps sim_*.png (default: %(default)s)")
+    parser.add_argument('--profiles-dir', default=os.path.dirname(script_dir),
+                        help="Directory of the profile_*.csv files (default: %(default)s)")
+    parser.add_argument('--basename', default='sim',
+                        help="Prefix of the Diwina maps (default: %(default)s)")
+    parser.add_argument('--rows', type=float, default=0.6,
+                        help="Fraction of central rows averaged in the Diwina maps (default: %(default)s)")
+    parser.add_argument('--tol', type=float, default=0.01,
+                        help="Maximum relative deviation (default: %(default)s)")
+    return parser.parse_args()
+
+
+def read_map(filename):
+    """Reads a 16-bit Diwina map and returns its physical values and its metadata."""
+    img = Image.open(filename)
+    vmin = float(img.info['Value min'])
+    vmax = float(img.info['Value max'])
+    values = vmin + np.array(img).astype(float) / 65535 * (vmax - vmin)
+    return values, img.info
+
+
+def read_profile(filename):
+    """Reads a profile along Ox (x in nm) saved by curling_holo_simulator."""
+    data = np.loadtxt(filename, delimiter=',', skiprows=1)
+    return data[:, 0], data[:, 1]
+
+
+if __name__ == "__main__":
+    args = configure_arguments()
+
+    # Mask of the wire, from the path length
+    x_nm, thick = read_profile(os.path.join(args.profiles_dir, 'profile_PATH_LENGTH.csv'))
+    inside = thick > 0
+
+    print(f"{'Quantity':12s} {'Unit':8s} {'Diwina extremum':>26s} {'Ours extremum':>26s} {'max deviation':>14s}")
+    failed = False
+    for diwina_name, profile_name, unit in PAIRS:
+        diwina_file = os.path.join(args.diwina_dir, f'{args.basename}_{diwina_name}.png')
+        profile_file = os.path.join(args.profiles_dir, f'profile_{profile_name}.csv')
+        values, info = read_map(diwina_file)
+        x, ours = read_profile(profile_file)
+
+        if values.shape[1] != x.size:
+            print(f"{RED}[ERROR]{RESET} {diwina_file}: {values.shape[1]} columns, "
+                  f"{profile_file}: {x.size} points", file=sys.stderr)
+            sys.exit(1)
+        if info.get('Value unit') != unit:
+            print(f"{RED}[WARNING]{RESET} {diwina_file}: unit {info.get('Value unit')}, expected {unit}",
+                  file=sys.stderr)
+
+        # Mean of the central rows of the Diwina map
+        n_rows = values.shape[0]
+        first = int(n_rows * (1 - args.rows) / 2)
+        diwina = values[first:n_rows - first].mean(axis=0)
+
+        deviation = np.abs(diwina - ours)[inside].max() / np.abs(ours).max()
+        i_d = np.argmax(np.abs(diwina))
+        i_o = np.argmax(np.abs(ours))
+        ok = deviation <= args.tol
+        failed |= not ok
+        status = f"{GREEN}OK{RESET}" if ok else f"{RED}FAIL{RESET}"
+        print(f"{diwina_name:12s} {unit:8s} "
+              f"{diwina[i_d]:+12.5g} at {x[i_d]:+6.1f} nm "
+              f"{ours[i_o]:+12.5g} at {x[i_o]:+6.1f} nm "
+              f"{deviation:13.3%}  {status}")
+
+    sys.exit(1 if failed else 0)

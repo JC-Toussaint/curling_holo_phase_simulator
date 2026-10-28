@@ -21,9 +21,11 @@ fmit-fresnel sim_HOLO_PHASE.png sim_PATH_LENGTH.png
 # (outputs analytics_*.png and profile_*.csv are written next to the script, in ..)
 ../curling_holo_simulator 1001 1e-9 --R 100e-9 --A 1.3e-11 --Ku=-1e5 --no-plots
 
-# Comparison: profiles of sim_MZ.png and sim_STXM_XMCD.png across the wire (away from
-# its ends) vs profile_MBEAM_INTEGRAL.csv and profile_STXM_XMCD.csv, and
-# sim_PATH_LENGTH.png vs profile_PATH_LENGTH.csv: they agree within 0.5 %.
+# Comparison: profiles of sim_PATH_LENGTH.png, sim_MZ.png and sim_STXM_XMCD.png across
+# the wire (away from its ends) vs profile_PATH_LENGTH.csv, profile_MBEAM_INTEGRAL.csv
+# and profile_STXM_XMCD.csv: they agree within 0.5 % (exit status 1 above --tol, 1 %)
+./compare_diwina
+
 # The holographic phase is not directly comparable: Diwina simulates a finite wire
 # (stray field), curling_holo_simulator an infinite one.
 
