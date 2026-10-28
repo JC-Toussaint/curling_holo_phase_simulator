@@ -251,8 +251,8 @@ def simulate_curling():
     I_minus = np.exp(-arg_minus)
     contrast_vals = (I_plus - I_minus) / (I_plus + I_minus)
 
-    # Integral of the component of mu_0*M along the beam (T.m): mu_0 * Ms * J(y)
-    Mbeam_vals = mu_0 * Ms * J_vals
+    # Integral of the component of M along the beam (A): Ms * J(y), as Mz_integral in Diwina
+    Mbeam_vals = Ms * J_vals
 
     return rho_grid, omega_bvp, y_vals, Mbeam_vals, phase_vals, thick_vals, contrast_vals
 
@@ -311,7 +311,7 @@ def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals, show_plots=True):
 def export_16bit_maps(Mbeam_vals, phase_vals, thick_vals, contrast_vals, show_plots=True):
     """
     Generates, normalizes and exports the 2D grayscale 16-bit images
-    (Integral of the beam component of mu_0*M map, Phase map, Thickness map and STXM contrast map)
+    (Integral of the beam component of M map, Phase map, Thickness map and STXM contrast map)
     with their respective metadata.
     """
     # --- Retrieve the current date and time ---
@@ -355,7 +355,7 @@ def export_16bit_maps(Mbeam_vals, phase_vals, thick_vals, contrast_vals, show_pl
 
     metadata_Mbeam.add_text("Value Min", str(Mbeam_min))
     metadata_Mbeam.add_text("Value Max", str(Mbeam_max))
-    metadata_Mbeam.add_text("Value Unit", "T.m")
+    metadata_Mbeam.add_text("Value Unit", "A")
 
     output_image_path_Mbeam = os.path.join(SCRIPT_DIR, 'analytics_MBEAM_INTEGRAL.png')
     img_Mbeam.save(output_image_path_Mbeam, pnginfo=metadata_Mbeam)
@@ -517,12 +517,12 @@ def export_16bit_maps(Mbeam_vals, phase_vals, thick_vals, contrast_vals, show_pl
 
 def export_profiles(y_vals, Mbeam_vals, phase_vals, thick_vals, contrast_vals):
     """
-    Saves the profiles along Ox (Integral of mu_0*M along the beam, holographic phase, path length and STXM contrast)
+    Saves the profiles along Ox (Integral of M along the beam, holographic phase, path length and STXM contrast)
     as CSV files, with the x coordinate in nm.
     """
     x_nm = y_vals * 1e9
     profiles = [
-        ('profile_MBEAM_INTEGRAL.csv', 'Mbeam (T.m)',   Mbeam_vals),
+        ('profile_MBEAM_INTEGRAL.csv', 'Mbeam (A)',     Mbeam_vals),
         ('profile_HOLO_PHASE.csv',  'Phase (rad)',      phase_vals),
         ('profile_PATH_LENGTH.csv', 'Path length (m)',  thick_vals),
         ('profile_STXM_XMCD.csv',   'Contrast (dimless)', contrast_vals),
