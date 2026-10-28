@@ -56,19 +56,26 @@ Dans le code, l'évaluation de cette expression est vectorisée sur tout le prof
 \section{Calcul de la Phase Cumulative $\Phi(y)$}
 En holographie électronique, la phase $\Phi(y)$ est liée au flux magnétique transverse intercepté. Elle s'obtient par l'intégration cumulative du profil $I(y)$.
 
-L'intégration de proche en proche s'effectue par la méthode des trapèzes à partir de la borne inférieure $-R$ :
+En intégrant les constantes physiques fondamentales (la charge élémentaire $e$ et la constante de Planck réduite $\hbar$) et en imposant une phase nulle sur l'axe du fil ($\Phi(0) = 0$), la phase cumulative vaut :
 \begin{equation}
-    F_{\text{from\_minus\_R}}(y) = \int_{-R}^{y} I(u) \, \mathrm{d}u
+    \Phi(y) = -\frac{e}{\hbar} \int_{0}^{y} I(u) \, \mathrm{d}u
 \end{equation}
 
-Afin de respecter la condition physique à l'origine imposant une phase nulle au centre exact du cylindre ($\Phi(0) = 0$), la constante d'intégration est ajustée en soustrayant la valeur évaluée en $y=0$ :
+\paragraph{Grille d'échantillonnage.} Les profils sont échantillonnés aux centres des $N$ pixels de taille $\Delta$ :
 \begin{equation}
-    F(y) = F_{\text{from\_minus\_R}}(y) - F_{\text{from\_minus\_R}}(0) = \int_{0}^{y} I(u) \, \mathrm{d}u
+    y_i = \left(i - \frac{N-1}{2}\right)\Delta, \qquad i \in \{0, \dots, N-1\}
 \end{equation}
+Cette grille est symétrique par rapport à $y = 0$ ; elle contient le point $y = 0$ si $N$ est impair, et non si $N$ est pair (les points sont alors aux demi-entiers, $\pm\Delta/2, \pm 3\Delta/2, \dots$).
 
-Enfin, en intégrant les constantes physiques fondamentales (la charge élémentaire $e$ et la constante de Planck réduite $\hbar$), la phase cumulative finale vaut :
+\paragraph{Intégration sur la demi-grille.} Par symétrie, $I(y)$ est paire et $\Phi(y)$ est impaire. Les calculs ne sont donc effectués que sur la demi-grille $0 = u_0 < u_1 < \dots < u_K$, formée des valeurs distinctes de $|y_i|$, à laquelle on ajoute $u_0 = 0$ afin que l'intégration parte de l'axe. $I$ est évaluée en chacun de ces points par quadrature, puis la phase est obtenue par la méthode des trapèzes cumulée (\texttt{cumulative\_trapezoid}) à partir de $u_0 = 0$, ce qui impose $\Phi(0) = 0$ :
 \begin{equation}
-    \Phi(y) = -\frac{e}{\hbar} F(y) = -\frac{e}{\hbar} \int_{0}^{y} I(u) \, \mathrm{d}u
+    \Phi(u_0) = 0, \qquad \Phi(u_k) = \Phi(u_{k-1}) - \frac{e}{\hbar}\,\frac{I(u_{k-1}) + I(u_k)}{2}\,(u_k - u_{k-1}), \quad k \geq 1
+\end{equation}
+Pour $N$ pair, le premier pas $u_1 - u_0 = \Delta/2$ vaut un demi-pixel ; les pas suivants valent $\Delta$.
+
+\paragraph{Prolongement à $y < 0$.} Les valeurs sur la grille complète s'en déduisent par parité :
+\begin{equation}
+    I(y_i) = I(|y_i|), \qquad \Phi(y_i) = \operatorname{sgn}(y_i)\,\Phi(|y_i|)
 \end{equation}
 
 \section{Génération de la Carte de Phase 2D}
