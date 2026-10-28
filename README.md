@@ -73,7 +73,7 @@ To generate the phase and thickness maps of a cylinder with radius $R = 100\text
 ```
 
 ### Output files
-The files are written next to the script:
+The files are written in the directory where the script is launched:
 * `analytics_MBEAM_INTEGRAL.png`, `analytics_HOLO_PHASE.png`, `analytics_PATH_LENGTH.png`, `analytics_STXM_XMCD.png`: 16-bit maps of $M_{\text{beam}}(y)$, $\Phi(y)$, the thickness and the STXM contrast, with their metadata;
 * `profile_MBEAM_INTEGRAL.csv`, `profile_HOLO_PHASE.csv`, `profile_PATH_LENGTH.csv`, `profile_STXM_XMCD.csv`: the corresponding profiles along Ox (comma-separated, one header line, $x$ in nm).
 

@@ -274,7 +274,7 @@ def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals, show_plots=True):
     plt.title("Dimensionless profile of the curling mode")
     plt.grid(alpha=0.3)
     plt.tight_layout()
-    plt.savefig(os.path.join(SCRIPT_DIR, 'curling_mode_adim.png'), dpi=150)
+    plt.savefig(os.path.join(OUTPUT_DIR, 'curling_mode_adim.png'), dpi=150)
     plt.show()
 
     # Fig 3: Phase profile Phi(y)
@@ -304,7 +304,7 @@ def generate_plots(rho_grid, omega_bvp, y_vals, phase_vals, show_plots=True):
     plt.title(r'Holographic Phase Profile $\Phi(y)$')
     plt.grid(alpha=0.3)
     plt.tight_layout()
-    plt.savefig(os.path.join(SCRIPT_DIR, 'phase_profile_y.png'), dpi=150)
+    plt.savefig(os.path.join(OUTPUT_DIR, 'phase_profile_y.png'), dpi=150)
     plt.show()
 
 
@@ -357,7 +357,7 @@ def export_16bit_maps(Mbeam_vals, phase_vals, thick_vals, contrast_vals, show_pl
     metadata_Mbeam.add_text("Value Max", str(Mbeam_max))
     metadata_Mbeam.add_text("Value Unit", "A")
 
-    output_image_path_Mbeam = os.path.join(SCRIPT_DIR, 'analytics_MBEAM_INTEGRAL.png')
+    output_image_path_Mbeam = os.path.join(OUTPUT_DIR, 'analytics_MBEAM_INTEGRAL.png')
     img_Mbeam.save(output_image_path_Mbeam, pnginfo=metadata_Mbeam)
 
     print(f"{GREEN}[Sucess]{RESET} 16-bit image (with metadata) saved to:\n -> {output_image_path_Mbeam}")
@@ -410,7 +410,7 @@ def export_16bit_maps(Mbeam_vals, phase_vals, thick_vals, contrast_vals, show_pl
     metadata_phase.add_text("Value Max", str(phase_max))
     metadata_phase.add_text("Value Unit", "rad")
 
-    output_image_path_phase = os.path.join(SCRIPT_DIR, 'analytics_HOLO_PHASE.png')
+    output_image_path_phase = os.path.join(OUTPUT_DIR, 'analytics_HOLO_PHASE.png')
     img_phase.save(output_image_path_phase, pnginfo=metadata_phase)
 
     print(f"{GREEN}[Sucess]{RESET} 16-bit image (with metadata) saved to:\n -> {output_image_path_phase}")
@@ -456,7 +456,7 @@ def export_16bit_maps(Mbeam_vals, phase_vals, thick_vals, contrast_vals, show_pl
     metadata_thick.add_text("Value Max", str(thick_max))
     metadata_thick.add_text("Value Unit", "m")
 
-    output_image_path_thick = os.path.join(SCRIPT_DIR, 'analytics_PATH_LENGTH.png')
+    output_image_path_thick = os.path.join(OUTPUT_DIR, 'analytics_PATH_LENGTH.png')
     img_thick.save(output_image_path_thick, pnginfo=metadata_thick)
 
     print(f"{GREEN}[Sucess]{RESET} 16-bit image (with metadata) saved to:\n -> {output_image_path_thick}")
@@ -505,7 +505,7 @@ def export_16bit_maps(Mbeam_vals, phase_vals, thick_vals, contrast_vals, show_pl
     metadata_contrast.add_text("Value Max", str(contrast_max))
     metadata_contrast.add_text("Value Unit", "dimless")
 
-    output_image_path_contrast = os.path.join(SCRIPT_DIR, 'analytics_STXM_XMCD.png')
+    output_image_path_contrast = os.path.join(OUTPUT_DIR, 'analytics_STXM_XMCD.png')
     img_contrast.save(output_image_path_contrast, pnginfo=metadata_contrast)
 
     print(f"{GREEN}[Sucess]{RESET} 16-bit image (with metadata) saved to:\n -> {output_image_path_contrast}")
@@ -528,7 +528,7 @@ def export_profiles(y_vals, Mbeam_vals, phase_vals, thick_vals, contrast_vals):
         ('profile_STXM_XMCD.csv',   'Contrast (dimless)', contrast_vals),
     ]
     for filename, label, values in profiles:
-        output_path = os.path.join(SCRIPT_DIR, filename)
+        output_path = os.path.join(OUTPUT_DIR, filename)
         np.savetxt(output_path, np.column_stack((x_nm, values)), delimiter=',',
                    header=f"x (nm),{label}", comments='')
         print(f"{GREEN}[Sucess]{RESET} Profile saved to:\n -> {output_path}")
@@ -578,8 +578,8 @@ if __name__ == "__main__":
     print(f" -> Display Plots : {show_plots}\n")
     print("="*50 + "\n")
 
-    # --- Dynamic determination of the script's directory ---
-    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+    # --- Output files are written in the directory where the script is launched ---
+    OUTPUT_DIR = os.getcwd()
 
     # 2. Launching the physical computations
     t_sim_start = time.perf_counter()

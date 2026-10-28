@@ -39,7 +39,7 @@ def configure_arguments():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--diwina-dir', default=script_dir,
                         help="Directory of the Diwina maps sim_*.png (default: %(default)s)")
-    parser.add_argument('--profiles-dir', default=os.path.dirname(script_dir),
+    parser.add_argument('--profiles-dir', default=script_dir,
                         help="Directory of the profile_*.csv files (default: %(default)s)")
     parser.add_argument('--basename', default='sim',
                         help="Prefix of the Diwina maps (default: %(default)s)")
